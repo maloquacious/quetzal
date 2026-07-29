@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Greenfield. `specification.md` is written; no Go source exists yet and there are no commits on `main`. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+Milestones 1–3 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), and dynamic memory (`memory.go`). Milestone 4 (`Stks`) is next, then the writer, which is why no `Save`, `Read`, or `Write` exists yet. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
 
 ## Commands
 

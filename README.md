@@ -22,9 +22,12 @@ Implemented so far:
   unknown chunks, and configurable resource limits.
 - Story identification: the `IFhd` chunk, extraction of the Z-machine header
   fields Quetzal depends on, and story matching.
+- Dynamic memory: the `CMem` and `UMem` chunks, compression and decompression of
+  the `CMem` difference stream, and reconstruction of a save's dynamic memory
+  against its story.
 
-Still to come: dynamic memory (`CMem` and `UMem`), stack frames (`Stks`), the
-file writer, and interoperability testing against an established interpreter.
+Still to come: stack frames (`Stks`), the file writer, and interoperability
+testing against an established interpreter.
 
 ## Install
 
@@ -86,6 +89,22 @@ if err != nil {
 if err := header.Verify(story); err != nil {
 	log.Fatal(err) // wraps quetzal.ErrStoryMismatch
 }
+```
+
+### Rebuild the saved dynamic memory
+
+Most saves store dynamic memory as a difference against the story it came from,
+so rebuilding it needs the story. `Memory` checks that the save and the story
+agree before it does so, since a difference applied to the wrong story would
+produce plausible nonsense rather than an error.
+
+```go
+mem, err := save.Memory(story)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Printf("%d bytes of dynamic memory, saved as %s\n", len(mem.Data), mem.Encoding)
 ```
 
 Errors wrap the sentinels `ErrInvalidFormat`, `ErrStoryMismatch`, `ErrTruncated`,

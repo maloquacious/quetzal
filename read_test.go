@@ -42,6 +42,18 @@ func ifzs(chunks ...[]byte) []byte {
 	return formBytes("IFZS", bytes.Join(chunks, nil))
 }
 
+// decodeIFZS builds a FORM IFZS container from already-encoded chunks and
+// decodes it, for tests whose subject is what a File holds rather than how it
+// was parsed.
+func decodeIFZS(t *testing.T, chunks ...[]byte) *quetzal.File {
+	t.Helper()
+	f, err := quetzal.Decode(bytes.NewReader(ifzs(chunks...)))
+	if err != nil {
+		t.Fatalf("Decode: unexpected error: %v", err)
+	}
+	return f
+}
+
 func TestDecodeValidContainer(t *testing.T) {
 	// A plausible save: identification, compressed memory, stacks, and an
 	// annotation. IFhd's 13-byte payload is odd and so exercises padding.
@@ -222,6 +234,20 @@ func TestDecodeMalformed(t *testing.T) {
 				'x', // pad byte omitted
 			}),
 			want: quetzal.ErrInvalidFormat,
+		},
+		{
+			name: "odd-length chunk whose pad byte is past the end of the input",
+			// The FORM accounts for the pad byte, so the chunk fits; the
+			// input simply stops before the byte arrives.
+			in: []byte{
+				'F', 'O', 'R', 'M',
+				0x00, 0x00, 0x00, 0x0e,
+				'I', 'F', 'Z', 'S',
+				'A', 'N', 'N', 'O',
+				0x00, 0x00, 0x00, 0x01,
+				'x',
+			},
+			want: quetzal.ErrTruncated,
 		},
 		{
 			name: "trailing bytes inside FORM too few for a chunk header",
