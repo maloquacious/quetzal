@@ -5,7 +5,6 @@ package quetzal_test
 import (
 	"bytes"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/maloquacious/quetzal"
@@ -522,16 +521,9 @@ func TestMemoryEncodingString(t *testing.T) {
 // TestMemoryRoundTripRealStory exercises compression against the dynamic
 // memory of real story files rather than synthetic patterns.
 func TestMemoryRoundTripRealStory(t *testing.T) {
-	for _, name := range []string{"zork1.z3", "zork2.z3", "zork3.z3"} {
+	for _, name := range storyFixtures(t) {
 		t.Run(name, func(t *testing.T) {
-			image, err := os.ReadFile("testdata/" + name)
-			if err != nil {
-				t.Fatalf("reading the story image: %v", err)
-			}
-			story, err := quetzal.ParseStory(image)
-			if err != nil {
-				t.Fatalf("ParseStory: unexpected error: %v", err)
-			}
+			story := loadStory(t, name)
 
 			// Change dynamic memory the way play would: scattered bytes,
 			// most of memory untouched. The pattern is fixed so a failure

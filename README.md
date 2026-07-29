@@ -171,11 +171,11 @@ This package is released under the MIT License. See [LICENSE](LICENSE).
 Some files in this repository are not part of the package and are not covered by
 the package's license.
 
-**The story files under `testdata/` are third-party works.** They are
+**The story files under `testdata/stories/` are third-party works.** They are
 included only as test fixtures, so that the package can be exercised against real
 Version 3 Z-machine story files. Their presence here does not make them part of
 this package, does not place them under this package's license, and grants you no
-rights to them. Each story file carries its own license file in `testdata/`, and
+rights to them. Each story file carries its own license file alongside it, and
 that license is what governs your use of it. See
 [testdata/README.md](testdata/README.md) for the source and license of each file.
 
