@@ -106,7 +106,11 @@ compresses page-at-a-time (3.3) emits adjacent runs, not an overrun.
 
 Both shorter and longer are rejected, per standard 3.6 and §9.1.
 
-*Where:* `memory.go`, `decodeUMem`. *Interop risk:* **low**.
+*Where:* `memory.go`, `decodeUMem`. *Interop risk:* **low**. The encoding itself
+is now exercised in both directions: Frotz restored a `UMem` file this package
+wrote, and `testdata/handbuilt/zork1-r119-umem.qzl` is a committed one. What has
+never happened is *reading* a `UMem` save produced by another implementation,
+because neither interpreter available here writes one.
 
 ### D7 — Chunk identifiers must be four printable ASCII characters
 
@@ -155,9 +159,13 @@ identifier.
 Chunks that are not `IFhd`, `CMem`, `UMem`, or `Stks` may appear anywhere,
 including before the `IFhd`. The standard constrains only those four.
 
-*Where:* `read.go`, `File.checkOrder`. *Interop risk:* **low**. Every save seen
-so far is in the required order, and a writer that gets it wrong is one an
-interpreter would likely reject too.
+*Where:* `read.go`, `File.checkOrder`. *Interop risk:* **medium**, raised from
+low on evidence. **Frotz 2.55 restores a save whose `IFhd` comes last** (section
+7), so this rejection is stricter than the most widely used interpreter, not
+merely stricter than the average one. Both writers examined emit the required
+order, so nothing has actually broken — but if some writer does not, its files
+will work everywhere except here. This is the first candidate for the lenient
+option D30 anticipates.
 
 ### D33 — `Read` validates the save it reconstructs, and so requires the dummy frame
 
@@ -172,10 +180,13 @@ This is a deliberate choice to be strict where the standard is unambiguous —
 place where reading rejects a file that decodes cleanly. `Decode` plus
 `File.Frames` remains the lenient path, and returns the frames as stored.
 
-*Where:* `read.go`, `File.Save`. *Interop risk:* **medium**. A single missing
-dummy frame from any real writer turns this from strictness into an
-interoperability bug. Confirm against more than one interpreter in Milestone 6;
-if it fires, the fix is an explicit lenient option, per §3.5.
+*Where:* `read.go`, `File.Save`. *Interop risk:* **low**, lowered from medium on
+evidence. **Frotz 2.55 refuses the same file** — a Kitchen save with its dummy
+frame removed — with `Fatal error: Error reading save file` (section 7). Its
+message does not say why, so this is not proof that it refuses for our reason;
+what it establishes is that such a save is not a file real interpreters accept,
+which is what the medium rating was hedging against. Two writers also emit the
+frame, so nothing has ever produced one to reject.
 
 ---
 
@@ -656,7 +667,7 @@ records what has actually been checked against another implementation so far.
 | Fixture | Exercises |
 |---|---|
 | Valid compressed save | D4, D5 |
-| Valid uncompressed save | D6 |
+| Valid uncompressed save | D6 — *have one, hand-built; no interpreter here writes `UMem`* |
 | Save with annotations | D29, D36 — *have one: Bocfel* |
 | Save with unknown chunks | D26, D36, D40 — *have one: Bocfel's `Bfhs`* |
 | Odd-length chunks and padding | D11 |
@@ -666,7 +677,7 @@ records what has actually been checked against another implementation so far.
 | Trailing omitted `CMem` differences | D17 |
 | A V1 or V2 game | D27 — *deferred, D43* |
 | A V6 game | D9, D33 (dummy frame absent) — *deferred, D43* |
-| Chunks in a non-standard order | D32 |
+| Chunks in a non-standard order | D32 — *built one; Frotz accepts it, we do not* |
 | A save with no dummy frame | D33 |
 | A save carrying an `IntD` chunk | D34, D35, D41 |
 
@@ -840,6 +851,50 @@ story its name claims, validate, round trip through both encodings, and begin
 with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
 to that file, so that a fixture replaced by one lacking them fails loudly rather
 than quietly testing less.
+
+### 2026-07-29 — asking Frotz about four non-conforming files
+
+The first test of *our strictness* rather than our correctness. Four files were
+built by taking the Frotz Kitchen save and breaking it in one way each, then
+offering them back to `dfrotz` to see whether it is as strict as we are.
+
+| File | Standard | Us | Frotz 2.55 |
+|---|---|---|---|
+| Memory and stacks before the `IFhd` | 5.4: `IFhd` "must come before the [CU]Mem and Stks chunks" | **refuse** (D32) | **restored it** |
+| No dummy frame, version 3 | 4.11: "a dummy stack frame must be stored as the first in the file" | **refuse** (D33) | **refused it** |
+| `IFhd` longer than 13 bytes | 5.5: a future version may enlarge it; the first 13 bytes keep their meaning | accept (D12) | restored it |
+| A second `IFhd` naming another story | 8.8: "the later chunks should simply be ignored" | accept, first wins (D40) | **refused it** |
+
+Two agreements and two disagreements, and the disagreements run in *opposite*
+directions. In both, this package does what the standard says and Frotz does
+not — so neither behavior can claim the reference implementation as support.
+
+**D33 is vindicated, which was the important one.** It was filed at medium risk
+because rejecting a file that decodes cleanly is the most dangerous kind of
+strictness, and because both writers happen to emit the dummy frame, so nothing
+tested it. Frotz refuses the same file — `Fatal error: Error reading save file`.
+Its message does not say why, so this is not proof it refuses *for our reason*;
+what it establishes is that a save missing the dummy frame is not a file real
+interpreters accept. Risk drops to **low**.
+
+**D32 is the opposite, and its risk goes up, not down.** Frotz restored a save
+whose `IFhd` came last, without complaint. Our rejection follows 5.4 and §7.1
+item 6 — both say the reader must verify the order — but it is now known to be
+stricter than the most widely used interpreter. That matters because it changes
+what a failure would mean: if some writer emits chunks out of order, its files
+work everywhere except here. Raised to **medium**, and it is the first candidate
+for the lenient option D30 anticipates.
+
+**D40's leniency is stricter-than-us in Frotz**, which is worth noticing for the
+opposite reason. Frotz rejects a duplicate `IFhd` outright — `Save file has two
+IFZS chunks!` — where 8.8 says later chunks "should simply be ignored". Our
+first-wins behavior is what the standard asks for and is more permissive than
+Frotz, so it cannot cause us to reject anything; it only means a file we happily
+read might be refused elsewhere. No change to its risk, which was already none.
+
+`TestGoldenNonConformingVariants` builds all four in-test from the committed
+Kitchen save and records the Frotz verdict alongside each, so the claims in this
+table stay attached to running code.
 
 ### 2026-07-29 — five Frotz fixtures, and the limit of this approach
 

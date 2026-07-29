@@ -4,9 +4,10 @@ Files the tests read. Nothing here is part of the package.
 
 ```
 testdata/
-├── stories/    Z-machine story files
-├── frotz/      save files made by Frotz
-├── gargoyle/   save files made by Bocfel, under Gargoyle
+├── stories/     Z-machine story files
+├── frotz/       save files made by Frotz
+├── gargoyle/    save files made by Bocfel, under Gargoyle
+├── handbuilt/   save files this package made itself
 └── README.md
 ```
 
@@ -67,3 +68,10 @@ its own unregistered chunk, a reference to the story file, and trailing bytes
 past the FORM — so these fixtures cover several things Frotz cannot produce.
 See `gargoyle/README.md`, including the note about the filesystem path embedded
 in the `IntD` chunk.
+
+## handbuilt/
+
+Saves this package wrote. There is one, holding uncompressed memory, because
+neither interpreter here can be made to produce such a file. A save we wrote
+ourselves proves only what our own code does, so this directory stays as close
+to empty as the fixture list allows. See `handbuilt/README.md`.
