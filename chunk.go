@@ -66,3 +66,95 @@ type Chunk struct {
 	ID   ID
 	Data []byte
 }
+
+// Sizes and flag bits within an IntD payload.
+const (
+	// intDHeaderSize is the fixed part of an IntD payload: the operating
+	// system identifier, the flags byte, the contents identifier, a
+	// reserved word, and the interpreter identifier.
+	intDHeaderSize = 12
+
+	// intDFlagPosition is the c bit: the contents are meaningful only for
+	// the exact saved position stored in the file that carries them.
+	intDFlagPosition = 0x01
+
+	// intDFlagMachine is the s bit: the contents are meaningful only on the
+	// machine or network the save was made on.
+	intDFlagMachine = 0x02
+)
+
+// InterpreterData is the fixed header of an IntD chunk, the place Quetzal
+// reserves for information one interpreter needs and others need not
+// understand.
+//
+// Data is opaque. This package assigns no meaning to it, because its meaning
+// belongs to whoever defined it: the interpreter named by Interpreter, running
+// on the system named by OperatingSystem. The reserved word the format places
+// before the interpreter identifier is not represented, since it carries no
+// information.
+type InterpreterData struct {
+	// OperatingSystem names the system the data belongs to. Four spaces
+	// mean the data is useful to every port of one interpreter.
+	OperatingSystem ID
+
+	// Flags is the flags byte, 000000sc. Prefer PositionSpecific,
+	// MachineSpecific, and Copyable to testing its bits.
+	Flags byte
+
+	// ContentsID says what the data is, within the scope of the operating
+	// system and interpreter that defined it.
+	ContentsID byte
+
+	// Interpreter names the interpreter the data belongs to. Four spaces
+	// mean the data is useful to every interpreter on the named system.
+	Interpreter ID
+
+	// Data is the interpreter's own payload, exactly as stored.
+	Data []byte
+}
+
+// PositionSpecific reports the c flag: the contents describe this saved
+// position and no other, so they must not be carried into another save.
+func (d InterpreterData) PositionSpecific() bool { return d.Flags&intDFlagPosition != 0 }
+
+// MachineSpecific reports the s flag: the contents, such as a filename or a
+// file reference, are meaningful only on the machine or network the save was
+// made on.
+func (d InterpreterData) MachineSpecific() bool { return d.Flags&intDFlagMachine != 0 }
+
+// Copyable reports whether this chunk may be carried from one save into
+// another.
+//
+// The format forbids copying position-specific contents outright, and forbids
+// copying machine-specific contents onto a different system. This package has
+// no notion of what system it is running on and so cannot tell a different one
+// from the original, which makes the machine-specific case indistinguishable
+// from the forbidden one. Copyable therefore answers no to both. A caller that
+// does know its own system can recover such a chunk from the decoded File and
+// carry it forward deliberately.
+func (d InterpreterData) Copyable() bool {
+	return d.Flags&(intDFlagPosition|intDFlagMachine) == 0
+}
+
+// ParseInterpreterData decodes the fixed header of an IntD payload, leaving
+// the remainder opaque.
+//
+// The returned value owns its data; the payload is neither retained nor
+// modified.
+func ParseInterpreterData(payload []byte) (InterpreterData, error) {
+	if len(payload) < intDHeaderSize {
+		return InterpreterData{}, prefixed(newErr(ErrInvalidFormat,
+			"IntD: payload is %d byte(s), want at least %d", len(payload), intDHeaderSize))
+	}
+
+	d := InterpreterData{
+		OperatingSystem: ID(payload[0:4]),
+		Flags:           payload[4],
+		ContentsID:      payload[5],
+		Interpreter:     ID(payload[8:12]),
+	}
+	if len(payload) > intDHeaderSize {
+		d.Data = append([]byte(nil), payload[intDHeaderSize:]...)
+	}
+	return d, nil
+}

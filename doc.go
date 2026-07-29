@@ -25,6 +25,17 @@
 // annotations does not inherently require the original story image, while
 // reconstructing compressed dynamic memory does.
 //
+// Writing runs the same way in reverse. Save.Encode turns saved state into a
+// container, File.WriteTo writes a container out, and Write does both:
+//
+//	quetzal.Read(r, story)  ==  quetzal.Decode(r) then File.Save(story)
+//	quetzal.Write(w, story, save)  ==  Save.Encode(story) then File.WriteTo(w)
+//
+// Reading and writing round trip semantically rather than byte for byte: a
+// save that is read and written again holds the same story identity, dynamic
+// memory, program counter, and call stack, but need not be the same sequence
+// of bytes, since the format leaves the choice of encoding open.
+//
 // # Story data
 //
 // Compressed memory (CMem) is an XOR difference against the story's original

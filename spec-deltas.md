@@ -11,8 +11,14 @@ always *did we choose this, or is it a bug?* This file answers that question
 without a code archaeology expedition.
 
 Entries have stable identifiers (D1, D2, ...) so commits, issues, and test
-names can point at them. **Interop risk** estimates the chance that the entry
-causes a disagreement with a real interpreter:
+names can point at them. Identifiers are assigned in the order entries are
+written, and entries are filed by subject, so the numbering within a section is
+not consecutive. An identifier is never reused or renumbered; an entry that is
+resolved stays where it is, marked, so that an old reference still lands
+somewhere.
+
+**Interop risk** estimates the chance that the entry causes a disagreement with
+a real interpreter:
 
 - **high** — expected to bite; plan a test for it.
 - **medium** — plausible; worth a fixture.
@@ -129,6 +135,44 @@ identifies the frame; nothing removes or reinterprets it, per §10.4.
 standard's own rule. Note that the converse is not checked: a V6 save carrying
 a dummy frame anyway is accepted.
 
+### D32 — `Read` rejects a file whose `IFhd` does not come before `CMem`/`UMem`/`Stks`
+
+Standard 5.4 requires that order so that an interpreter learns it has the wrong
+story before decoding memory against it, and §7.1 item 6 repeats the
+requirement. This closes the gap that D25 recorded.
+
+The check lives in `Read`, not in `Decode`. `Decode` reports what the container
+holds and deliberately judges nothing about which chunks are present or what
+they mean; ordering is only meaningful relative to chunks whose presence is
+required, so it belongs with the layer that requires them. A caller that wants
+a mis-ordered file anyway can still `Decode` it and pull the chunks out by
+identifier.
+
+Chunks that are not `IFhd`, `CMem`, `UMem`, or `Stks` may appear anywhere,
+including before the `IFhd`. The standard constrains only those four.
+
+*Where:* `read.go`, `File.checkOrder`. *Interop risk:* **low**. Every save seen
+so far is in the required order, and a writer that gets it wrong is one an
+interpreter would likely reject too.
+
+### D33 — `Read` validates the save it reconstructs, and so requires the dummy frame
+
+`Read` finishes by calling `Save.Validate`, which makes a `*Save` returned by
+`Read` a save that could be written straight back out. Everything Validate
+checks is already guaranteed by decoding except one thing: D9's rule that a
+save for any version but 6 must begin with the dummy frame. So in practice this
+entry *is* D9, applied on the way in.
+
+This is a deliberate choice to be strict where the standard is unambiguous —
+4.11.2 tells interpreters they "may assume its presence" — and it is the one
+place where reading rejects a file that decodes cleanly. `Decode` plus
+`File.Frames` remains the lenient path, and returns the frames as stored.
+
+*Where:* `read.go`, `File.Save`. *Interop risk:* **medium**. A single missing
+dummy frame from any real writer turns this from strictness into an
+interoperability bug. Confirm against more than one interpreter in Milestone 6;
+if it fires, the fix is an explicit lenient option, per §3.5.
+
 ---
 
 ## 2. More lenient than a literal reading
@@ -186,6 +230,19 @@ than 6 require the dummy frame — so the check belongs to `ValidateFrames`,
 which has the story.
 
 *Where:* `stack.go`, `DecodeStks`. *Interop risk:* **none**.
+
+### D35 — Standard 7.14 is not enforced: an `IntD` may name neither a system nor an interpreter
+
+7.14 says the interpreter and operating-system IDs "may not both be `    `"
+(four spaces), since a chunk useful to every interpreter on every system is a
+contradiction. `ParseInterpreterData` accepts it, as it accepts a non-zero
+reserved word and any contents ID.
+
+Rejecting would mean failing a restore over an optional chunk whose payload we
+do not read, which trades a real capability for the enforcement of a rule that
+distinguishes no file anyone writes.
+
+*Where:* `chunk.go`, `ParseInterpreterData`. *Interop risk:* **none**.
 
 ---
 
@@ -245,6 +302,65 @@ Standard 3.3 and §9.3 both say this is fine.
 
 *Where:* `memory.go`. *Interop risk:* **none**.
 
+### D34 — `Read` does not carry forward `IntD` chunks the standard forbids copying
+
+Standard 7.11: if the `c` flag is set, the contents "must not be copied" into
+another file, because they describe the exact saved position that carries them.
+7.10: if the `s` flag is set and the operating-system ID does not match the
+current system, the chunk "should not be copied". §13 asks for a conservative
+default.
+
+`Read` therefore leaves three kinds of `IntD` chunk out of the `Save`:
+
+- `c` set — forbidden outright.
+- `s` set — this package has no notion of what system it is running on, so it
+  cannot distinguish the permitted case (same machine) from the forbidden one.
+  The conservative reading is the only one available to it.
+- shorter than the 12-byte fixed header — a payload that cannot state its
+  restrictions cannot be shown to be free of them.
+
+The drop is on the reading side because the standard's restriction is on the
+*copy*, which is the load-then-save path. A caller that builds its own `IntD`
+and puts it in `Save.Chunks` gets it written, flags and all; the writer imposes
+nothing. And nothing is lost outright: `Decode` retains every chunk, so a
+caller that does know its own machine can take the chunk from the `File` and
+carry it forward deliberately.
+
+*Where:* `read.go`, `File.Save`; `chunk.go`, `InterpreterData.Copyable`.
+*Interop risk:* **low** outbound (dropping a chunk cannot make a file invalid);
+**none** inbound. The cost is a MacOS alias or similar being discarded when it
+would in fact have been usable — see 7.22.
+
+### D36 — Additional chunks are always written after the three required ones
+
+`Save.Encode` writes `IFhd`, then memory, then `Stks`, then everything in
+`Save.Chunks` in the order the save holds them. A file read with an annotation
+*before* its `IFhd` is therefore written back with the annotation last.
+
+The relative order of the additional chunks is preserved, per §5.4; their
+position relative to the required three is not. Standard 5.4 fixes only that
+`IFhd` comes first, and §18.2 does not promise a byte-identical rewrite.
+
+*Where:* `write.go`, `Save.Encode`. *Interop risk:* **none**.
+
+### D37 — An unset memory encoding is an error, not a default
+
+`Memory{Data: mem}` with no `Encoding` fails to write. Quetzal recommends
+compression and defaulting to it would always produce a valid file, so this is
+strictness for its own sake — but a save whose encoding was never chosen is
+more likely to be a half-built value than a request for the default, and
+`WithEncoding` makes saying so a single call.
+
+*Where:* `memory.go`, `Memory.Validate`. *Interop risk:* **none**.
+
+### D38 — `File.WriteTo` refuses a FORM larger than 4 GiB
+
+The FORM length is a four-byte field, so a longer container cannot describe
+itself. §11 requires rejecting fields that cannot be represented. Dynamic
+memory tops out at 64 KB, so reaching this needs deliberate effort.
+
+*Where:* `write.go`, `File.WriteTo`. *Interop risk:* **none**.
+
 ---
 
 ## 4. Data model deviations from `specification.md`
@@ -292,27 +408,78 @@ version-dependent and `ValidateFrames` needs it.
   built by hand leaves it zero and gets the defaults.
 - `MaxLocals`, `MaxEvaluationWords` — exported so callers can validate before
   building frames.
+- `Save.Encode`, `File.WriteTo`, `File.Save` — the halves of `Read` and
+  `Write`, exposed for the same reason `Decode` is: a caller may want the
+  container without the state, or the state without the bytes.
+
+*Interop risk:* **none**.
+
+### D39 — `Read`, `Write`, and `Validate` take `Story` by value, not `*Story`
+
+§7, §11, and §14 all write `*Story`. This package takes it by value, as
+`Header.Verify`, `File.Memory`, and `ValidateFrames` already did.
+
+A pointer would mean a nil story is meaningful: *reconstruct what you can
+without one*. That case is already served, and served better, by `Decode` —
+which needs no story precisely because it reconstructs nothing. `Read` cannot
+do its job without a story: compressed memory is a difference against one, and
+the Z-machine version decides what the call stack must contain. Making the
+parameter unmissable says so.
+
+`Story` holds one slice header and four small fields, so passing it by value
+costs nothing worth measuring, and it removes the question of whether the
+package retains the pointer.
+
+*Interop risk:* **none**.
+
+### D40 — `Save.Chunks` holds only the chunks the other fields do not
+
+§5's `Save` has both the interpreted fields and a `Chunks []Chunk`, without
+saying whether the latter repeats the former. It does not: `IFhd`, `CMem`,
+`UMem`, and `Stks` are represented by `Header`, `Memory`, and `Frames`, and
+`Save.Validate` rejects a save that also carries one of them as an additional
+chunk. Writing both would mean writing a file that contradicts itself, and
+there would be no rule for which copy wins.
+
+Two consequences on the reading side:
+
+- A duplicate of a single-instance chunk is dropped, not preserved. Standard
+  7.2 makes the first instance authoritative and the rest ignorable; carrying
+  an ignored `IFhd` into `Save.Chunks` would only cause the writer to emit a
+  file with two of them. `Decode` still keeps every chunk, duplicates included.
+- Multiple `ANNO` chunks are unaffected. They are legal in quantity, so they
+  are all kept, in order.
+
+*Where:* `read.go`, `File.Save`; `write.go`, `checkExtraChunks`.
+*Interop risk:* **none**.
+
+### D41 — `InterpreterData` omits the reserved word and cannot be encoded
+
+§13's representative type is followed except that the two reserved bytes
+between the contents ID and the interpreter ID are not represented: 7.8.6 fixes
+them at zero, so they carry nothing.
+
+There is no `Encode` counterpart. §13 says the payload is opaque and this
+package "MUST NOT assign semantics to interpreter-specific payloads it does not
+understand"; a caller that wants to write an `IntD` builds the `Chunk` itself,
+which is a dozen bytes of `append`. Parsing exists only because the writer has
+to read the flags to honor 7.11.
 
 *Interop risk:* **none**.
 
 ---
 
-## 5. Not implemented yet
+## 5. Gaps
 
 Gaps, not decisions. Listed because an interoperability failure may trace to
-one of them rather than to a delta above.
+one of them rather than to a delta above. Entries resolved by later work stay
+here, marked, so that a reference to their identifier still lands somewhere.
 
 ### D25 — §7.1 item 6 is unenforced: nothing checks that `IFhd` precedes `CMem`/`UMem`/`Stks`
 
-Standard 5.4 requires this ordering so that an interpreter does not decode
-memory only to discover the wrong story. We read the chunks by identifier, so
-order does not affect *our* results, and nothing currently rejects a file that
-gets it wrong. The writer (Milestone 5) must still emit them in order, which
-§11 requires.
-
-*Interop risk:* **medium** in the outbound direction — an external interpreter
-may well enforce what we do not. Verify our own output ordering as part of
-Milestone 5, not 6.
+**Resolved in Milestone 5.** `Read` enforces the ordering and `Save.Encode`
+produces it; `Decode` still does not check. See D32 for the reasoning and for
+where the check lives.
 
 ### D26 — `Limits.MaxUnknownBytes` is declared but never enforced
 
@@ -349,17 +516,17 @@ there is no diagnostics facility.
 
 *Interop risk:* **none**.
 
-### D29 — No `IntD` parsing, no text-chunk helpers
+### D29 — No text-chunk helpers
 
-§13's `InterpreterData` and §12's `Annotations`/`Author` helpers do not exist.
-Both chunk kinds survive as raw chunks, so nothing is lost. §13's requirement
-that rewriting respect `IntD` copy restrictions has no implementation to
-violate yet, and must be honored when the writer gains the ability to copy
-chunks forward.
+§12's `Annotations` and `Author` helpers do not exist. Both chunk kinds survive
+as raw chunks in `Save.Chunks` and in the decoded `File`, so nothing is lost;
+what is missing is the convenience of reading them as text.
 
-*Interop risk:* **low** now, **medium** once the writer copies unknown chunks —
-standard 7.22-style `IntD` payloads are machine-specific and must not be copied
-blindly.
+§13's `InterpreterData` **does** now exist, along with the copy restrictions it
+was needed for — see D34 and D41. That half of this entry is resolved.
+
+*Interop risk:* **none**. The chunks round-trip whether or not anything
+interprets them.
 
 ### D30 — No lenient mode
 
@@ -372,8 +539,22 @@ outright and introducing the option §3.5 anticipates.
 
 ### D31 — No `Save`, `Read`, or `Write`
 
-Milestone 5. The pieces exist: `File.Header`, `File.Memory`, `File.Frames`,
-`Header.Encode`, `Memory.Encode`, `EncodeStks`.
+**Resolved in Milestone 5.** All three exist, along with `Save.Validate`,
+`Save.Encode`, `File.Save`, `File.WriteTo`, and `WithEncoding`. The choices
+made along the way are D32–D41.
+
+### D42 — `Limits` are not applied when writing
+
+`Limits` bounds a decode, because a decode allocates from lengths the file
+supplies. Writing allocates from values the caller supplies, so there is
+nothing hostile to bound and no `WriteOption` for limits. The one size check on
+the writing side is D38's four-byte FORM length.
+
+This is a deliberate asymmetry rather than an oversight, recorded here in case
+a caller ever wants "write nothing larger than *n*" — which would be a new
+option, not a reuse of `Limits`.
+
+*Interop risk:* **none**.
 
 ---
 
@@ -386,18 +567,20 @@ records what has actually been checked against another implementation so far.
 |---|---|
 | Valid compressed save | D4, D5, D27 |
 | Valid uncompressed save | D6 |
-| Save with annotations | D29 |
-| Save with unknown chunks | D26, D29 |
+| Save with annotations | D29, D36 |
+| Save with unknown chunks | D26, D36, D40 |
 | Odd-length chunks and padding | D11 |
 | Multiple stack frames | D1, D2, D16 |
 | Long zero runs | D18 |
 | Trailing omitted `CMem` differences | D17 |
 | A V1 or V2 game | D27 |
-| A V6 game | D9 (dummy frame absent) |
-| Chunks in a non-standard order | D25 |
+| A V6 game | D9, D33 (dummy frame absent) |
+| Chunks in a non-standard order | D32 |
+| A save with no dummy frame | D33 |
+| A save carrying an `IntD` chunk | D34, D35, D41 |
 
-The last three are additions to §19's list, one per open gap that only a real
-file can settle.
+The last five are additions to §19's list, one per open question that only a
+real file can settle.
 
 ---
 
@@ -440,3 +623,43 @@ Recorded because it is the only contact with another implementation to date.
 
 Treat this as a smoke test that passed, not as evidence that section 1 is
 safe.
+
+### 2026-07-29 — the same save read, rewritten, and restored by Frotz
+
+Run when Milestone 5 landed, to find out whether the writer produces files
+another interpreter accepts. Same probe save, same story, same `dfrotz` 2.55.
+Again a one-off, not part of `go test ./...`.
+
+`Read` accepted Frotz's file: release 119, serial 880429, checksum `0xbf44`,
+PC `0x7590`, `CMem`, five frames, no additional chunks. `Write` then produced
+**434 bytes, byte for byte identical to the file Frotz wrote.**
+
+That is a stronger result than §18.1 asks for, and it was not aimed at: the
+standard permits any correct encoding, and D17, D18, and D20 are all places
+where a different choice would have produced a different file of equal
+validity. It means our compression happens to make the same choices Frotz's
+does on this input — a coincidence worth noticing and not worth relying on. The
+round-trip test in `write_test.go` checks semantic equality, not this.
+
+Three files written by this package were then restored in `dfrotz`, each
+landing in the Kitchen with score 10 at move 4, which is the saved position:
+
+| File | What it tests | Result |
+|---|---|---|
+| The rewrite above | Acceptance criterion 7, outbound `CMem` | restored |
+| The same save with `WithEncoding(MemoryUncompressed)`, 11424 bytes | D6 outbound — Frotz never *writes* `UMem` | restored |
+| The same save plus an `ANNO` and an unregistered `Zzzz` chunk | D36, D40 — unknown chunks in a file someone else reads | restored |
+
+**What this establishes.** Acceptance criteria 7 and 8 are met for one
+interpreter: Frotz reads what we write and we read what Frotz writes. D6 is no
+longer entirely unexercised — the `UMem` path is now known to work outbound,
+though still never inbound from a real writer. An interpreter tolerating a
+chunk it has no name for is confirmed rather than assumed.
+
+**What it does not establish.** Everything section 7's first entry could not,
+minus the two lines above. In particular D33 is the new strictness and nothing
+here tests it: Frotz writes the dummy frame, so the one file that would matter
+— a real save without one — still does not exist. D27 remains untouched.
+
+One interpreter is one interpreter. Frotz agreeing with us proves the pair is
+consistent, not that either is right.

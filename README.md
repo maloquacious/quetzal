@@ -27,9 +27,11 @@ Implemented so far:
   against its story.
 - Stack frames: the `Stks` chunk, frame decoding and encoding, the dummy frame
   that versions other than 6 require, and frame validation.
+- Reading and writing whole saves: `Read`, `Write`, and `Validate`, the copy
+  restrictions on interpreter-dependent `IntD` data, and semantic round trips.
 
-Still to come: the file writer, and interoperability testing against an
-established interpreter.
+Still to come: interoperability testing against an established interpreter,
+which is what will decide whether this is finished.
 
 ## Install
 
@@ -132,9 +134,44 @@ for i, frame := range frames {
 }
 ```
 
+### Read and write whole saves
+
+The examples above take a save apart a piece at a time. `Read` does all of it at
+once and checks the result, which is what an interpreter restoring a game wants.
+`Write` is its inverse.
+
+```go
+save, err := quetzal.Read(f, story)
+if err != nil {
+	log.Fatal(err)
+}
+
+// Resume the game from save.Memory.Data, save.Header.PC, and save.Frames,
+// then save it again later.
+out, err := os.Create("save.qzl")
+if err != nil {
+	log.Fatal(err)
+}
+defer out.Close()
+
+if err := quetzal.Write(out, story, save); err != nil {
+	log.Fatal(err)
+}
+```
+
+Reading and writing round trip semantically, not byte for byte: the story
+identity, dynamic memory, program counter, and stack frames all survive, but the
+bytes need not, since the format leaves the choice of encoding open. Pass
+`quetzal.WithEncoding(quetzal.MemoryUncompressed)` to write dynamic memory in
+full rather than as a difference.
+
+`Save.Validate(story)` runs the same checks without producing a file, for a
+caller assembling a save of its own.
+
 Errors wrap the sentinels `ErrInvalidFormat`, `ErrStoryMismatch`, `ErrTruncated`,
 and `ErrLimitExceeded`, so test them with `errors.Is`. Container problems are
-reported as a `*ChunkError` naming the chunk and its offset.
+reported as a `*ChunkError` naming the chunk and its offset, and stack problems
+as a `*FrameError` naming the frame.
 
 ## Design
 

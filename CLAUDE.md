@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Milestones 1–4 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), dynamic memory (`memory.go`), and stack frames (`stack.go`). Milestone 5 is the writer, which is why no `Save`, `Read`, or `Write` exists yet — the pieces they will assemble (`File.Header`, `File.Memory`, `File.Frames`, and the matching `Encode` functions) are all in place. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+Milestones 1–5 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), dynamic memory (`memory.go`), stack frames (`stack.go`), and the writer plus the whole-save layer (`write.go`, `Save`/`Read`/`Write`/`Validate`). Milestone 6 is interoperability; `testdata/frotz/README.md` has the recipe for making fixtures and §7 of `spec-deltas.md` records what has actually been checked against Frotz so far. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+
+Layering, in both directions: `Decode` → `File` → `File.Save` → `Save`, and `Save.Encode` → `File` → `File.WriteTo`. `Read` and `Write` are the two compositions. `Decode`/`File` need no story and judge nothing; `Read`/`Save` require the story and validate.
 
 ## Commands
 
@@ -48,7 +50,9 @@ These come from the spec and shape nearly every file:
 - Frame flags byte: low four bits are the local count (reject `> 15`); the `p` bit means the result is discarded, in which case writers emit a zero result variable.
 - `Evaluation[0]` is the least-recent word, `Evaluation[len-1]` is the top of stack — file order. Document this on every relevant exported type.
 - The V<6 dummy first frame is preserved as-is at this layer, never silently dropped.
-- Duplicate single-instance chunks: first wins, later ones ignored. Multiple `ANNO` chunks are legal.
+- Duplicate single-instance chunks: first wins, later ones ignored. Multiple `ANNO` chunks are legal. An ignored duplicate never reaches `Save.Chunks`, or the writer would emit two of it.
+- `IFhd` must come before `CMem`/`UMem`/`Stks` (5.4). `Read` enforces this; `Decode` deliberately does not.
+- `IntD` has a 12-byte fixed header and a flags byte `000000sc`: `c` means the contents belong to this saved position only, `s` means they belong to this machine only. Neither kind may be copied into another file, so `Read` leaves them out of the `Save` (7.10, 7.11, §13).
 
 ## Errors
 

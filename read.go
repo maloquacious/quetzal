@@ -57,6 +57,132 @@ func (f *File) All(id ID) []Chunk {
 	return found
 }
 
+// Save is a Quetzal saved game with its state reconstructed: the story it
+// belongs to, the dynamic memory it recorded, and the call stack it was
+// suspended on.
+//
+// A Save is what an interpreter needs in order to restore. It is the
+// interpreted form of a File, and unlike a File it makes the claim that the
+// save is complete and consistent with the story it names.
+type Save struct {
+	// Header is the story identification and saved program counter from the
+	// IFhd chunk.
+	Header Header
+
+	// Memory is the dynamic memory the save recorded, already expanded, and
+	// the encoding it was stored in.
+	Memory Memory
+
+	// Frames is the call stack, oldest frame first. On every Z-machine
+	// version except 6 the first frame is the dummy frame that holds
+	// top-level evaluation-stack state.
+	Frames []Frame
+
+	// Chunks holds the file's remaining chunks in their original relative
+	// order: annotations, author and copyright text, interpreter data, and
+	// chunks this package assigns no meaning to. Writing a Save writes them
+	// after the three chunks the fields above describe.
+	//
+	// It never holds an IFhd, CMem, UMem, or Stks chunk. Those are
+	// represented by the fields above, and a second copy of one would
+	// contradict them.
+	Chunks []Chunk
+}
+
+// Read reads a Quetzal save and reconstructs the state it holds.
+//
+// The story is required. Dynamic memory is usually stored as a difference
+// against the story it came from and cannot be rebuilt without it, and the
+// story's version decides what the call stack must contain. Read verifies that
+// the save belongs to the story before rebuilding anything, and reports
+// ErrStoryMismatch if it does not.
+//
+// Use Decode instead to examine a save's structure without a story.
+//
+// The returned Save owns its data. Neither the reader's bytes nor the story
+// are retained or modified.
+func Read(r io.Reader, story Story, opts ...ReadOption) (*Save, error) {
+	f, err := Decode(r, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return f.Save(story)
+}
+
+// Save reconstructs the saved state held in an already-decoded file, which is
+// what Read does after decoding.
+//
+// The file must hold the chunks Quetzal requires, its IFhd must come before
+// its memory and stack chunks, and the resulting save must be valid for the
+// given story.
+func (f *File) Save(story Story) (*Save, error) {
+	header, err := f.Header()
+	if err != nil {
+		return nil, err
+	}
+	// Only now is it known that an IFhd exists, which is what makes a
+	// memory or stack chunk found before one an ordering error rather than
+	// a missing-chunk error.
+	if err := f.checkOrder(); err != nil {
+		return nil, err
+	}
+
+	// Memory verifies the story identity before expanding anything.
+	memory, err := f.Memory(story)
+	if err != nil {
+		return nil, err
+	}
+	frames, err := f.Frames()
+	if err != nil {
+		return nil, err
+	}
+
+	save := &Save{Header: header, Memory: memory, Frames: frames}
+	for _, c := range f.Chunks {
+		switch c.ID {
+		case IDIFhd, IDCMem, IDUMem, IDStks:
+			// Represented by the fields above, including any duplicate
+			// that the first-instance rule made irrelevant.
+			continue
+		case IDIntD:
+			// Interpreter data may carry restrictions on being copied
+			// into another file, and a payload too short to state its
+			// restrictions cannot be shown to be free of them.
+			if d, err := ParseInterpreterData(c.Data); err != nil || !d.Copyable() {
+				continue
+			}
+		}
+		save.Chunks = append(save.Chunks, Chunk{ID: c.ID, Data: append([]byte(nil), c.Data...)})
+	}
+
+	if err := save.Validate(story); err != nil {
+		return nil, err
+	}
+	return save, nil
+}
+
+// checkOrder reports a memory or stack chunk that appears before the IFhd
+// chunk. The format requires that order so that an interpreter finds out it
+// has the wrong story before it decodes anything against it.
+//
+// The caller must already have established that an IFhd is present, since
+// otherwise this reports the ordering problem that a missing chunk implies
+// rather than the missing chunk itself.
+func (f *File) checkOrder() error {
+	for _, c := range f.Chunks {
+		if c.ID == IDIFhd {
+			break
+		}
+		switch c.ID {
+		case IDCMem, IDUMem, IDStks:
+			return prefixed(newErr(ErrInvalidFormat,
+				"%s chunk appears before the %s chunk, which must come first so that a save for the wrong story is recognized before its memory is decoded",
+				c.ID, IDIFhd))
+		}
+	}
+	return nil
+}
+
 // ReadOption configures a decode.
 type ReadOption func(*readConfig)
 

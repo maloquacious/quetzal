@@ -261,23 +261,34 @@ func EncodeStks(frames []Frame) ([]byte, error) {
 // other than 6 must begin with the dummy frame that holds top-level
 // evaluation-stack state.
 func ValidateFrames(frames []Frame, story Story) error {
-	// Version 6 starts at a routine, so its first frame is a real call and
-	// no dummy frame is written.
-	if story.Version != 6 {
-		if len(frames) == 0 {
-			return prefixed(newErr(ErrInvalidFormat,
-				"Stks: no frames, but a version %d save must begin with the dummy frame",
-				story.Version))
-		}
-		if !frames[0].IsDummy() {
-			return &FrameError{Index: 0, Err: newErr(ErrInvalidFormat,
-				"a version %d save must begin with the dummy frame", story.Version)}
-		}
+	if err := checkDummyFrame(frames, story); err != nil {
+		return err
 	}
 	for i, f := range frames {
 		if err := f.validate(); err != nil {
 			return &FrameError{Index: i, Err: err}
 		}
+	}
+	return nil
+}
+
+// checkDummyFrame reports whether the call stack begins as the story's
+// Z-machine version requires. It is the part of ValidateFrames that depends on
+// the story, and so the part that encoding a stack cannot check for itself.
+func checkDummyFrame(frames []Frame, story Story) error {
+	// Version 6 starts at a routine, so its first frame is a real call and
+	// no dummy frame is written.
+	if story.Version == 6 {
+		return nil
+	}
+	if len(frames) == 0 {
+		return prefixed(newErr(ErrInvalidFormat,
+			"Stks: no frames, but a version %d save must begin with the dummy frame",
+			story.Version))
+	}
+	if !frames[0].IsDummy() {
+		return &FrameError{Index: 0, Err: newErr(ErrInvalidFormat,
+			"a version %d save must begin with the dummy frame", story.Version)}
 	}
 	return nil
 }
