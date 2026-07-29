@@ -4,10 +4,16 @@ Files the tests read. Nothing here is part of the package.
 
 ```
 testdata/
-├── stories/   Z-machine story files
-├── frotz/     save files made by Frotz
+├── stories/    Z-machine story files
+├── frotz/      save files made by Frotz
+├── gargoyle/   save files made by Bocfel, under Gargoyle
 └── README.md
 ```
+
+Saves are kept in a directory per interpreter rather than pooled, because which
+program wrote a file is the most useful thing to know about it. Two
+implementations disagreeing is the finding; a directory of mixed saves would
+hide which one to suspect.
 
 ## stories/
 
@@ -52,3 +58,12 @@ is the one that applies. Read it before you reuse a story file for anything.
 Saves written by Frotz, an established interpreter. They are what proves this
 package reads files it did not write. See `frotz/README.md` for how to make
 them.
+
+## gargoyle/
+
+Saves written by Bocfel, a second and unrelated implementation, running under
+Gargoyle. Bocfel writes a considerably fuller file than Frotz — annotations,
+its own unregistered chunk, a reference to the story file, and trailing bytes
+past the FORM — so these fixtures cover several things Frotz cannot produce.
+See `gargoyle/README.md`, including the note about the filesystem path embedded
+in the `IntD` chunk.

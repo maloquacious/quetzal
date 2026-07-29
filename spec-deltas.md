@@ -635,8 +635,8 @@ records what has actually been checked against another implementation so far.
 |---|---|
 | Valid compressed save | D4, D5 |
 | Valid uncompressed save | D6 |
-| Save with annotations | D29, D36 |
-| Save with unknown chunks | D26, D36, D40 |
+| Save with annotations | D29, D36 — *have one: Bocfel* |
+| Save with unknown chunks | D26, D36, D40 — *have one: Bocfel's `Bfhs`* |
 | Odd-length chunks and padding | D11 |
 | Multiple stack frames | D1, D2, D16 |
 | Long zero runs | D18 |
@@ -731,3 +731,57 @@ here tests it: Frotz writes the dummy frame, so the one file that would matter
 
 One interpreter is one interpreter. Frotz agreeing with us proves the pair is
 consistent, not that either is right.
+
+### 2026-07-29 — a second implementation: Bocfel 2.5, via Gargoyle
+
+The first save from an implementation unrelated to Frotz. Bocfel 2.5, running
+under Gargoyle, same story and same position as the two entries above — Zork I
+r119, the Kitchen, four moves in. Written by hand, not by script; Gargoyle is a
+GUI application.
+
+This one is a much richer file than Frotz's, and it moved several entries.
+
+**Container.** `IFhd` 13, `IntD` 94, `CMem` 291, `Stks` 92, `ANNO` 23, `Bfhs`
+2514 — and **eight bytes after the end of the FORM**.
+
+| Delta | Observation |
+|---|---|
+| D13 | The eight trailing bytes make this the entry that matters most. Our decoder ignores anything past the FORM, which was filed as leniency with nothing behind it. It turns out that **a reader demanding end-of-input at the end of the FORM would reject every Gargoyle save.** The lenient reading was right, and not by luck. |
+| D34 | A real `IntD`, and exactly the case the drop rule was written for: operating system `UNIX`, interpreter `    ` (four spaces), flags `0x02` — the `s` bit — and a payload holding the **absolute filesystem path of the story file**. This is standard 7.12's "magical OS-dependent reference to the original story file", and 7.10 is why it must not be copied to another machine. `Read` dropped it; `Decode` kept it. |
+| D26, D40 | `Bfhs` is Bocfel's own chunk, unregistered anywhere, and it is not small: 2514 bytes holding the game's scrollback as 16-bit characters. Preserved, carried into `Save.Chunks`, and written back out. |
+| D29 | A real `ANNO`: `"Interpreter: Bocfel 2.5"`. §12's text-chunk helpers now have something to be useful about. |
+| D9, D33 | The dummy frame is present, with six words of evaluation stack. Two independent implementations, two dummy frames. |
+| D17 | The difference stream covers 11242 of 11282 bytes — **the same 40-byte trailing omission Frotz made**. Two unrelated implementations dropping the same trailing region is about as strong as this kind of evidence gets. |
+| D18 | 85 runs, 30 of them at the 256-byte maximum, in a four-move save. Same picture as Frotz. |
+
+**Cross-implementation agreement.** Frotz and Bocfel, saving the same position,
+produced the same PC (`0x7590`), the same number of frames (5), and dynamic
+memory differing in **exactly one byte** — at address `0x0001`, which is Flags 1
+in the Z-machine header. That byte is interpreter capability, not game state:
+Frotz wrote `0x20`, Bocfel `0x60`.
+
+Worth understanding rather than filing away. It means two correct saves of one
+position are *expected* to differ in dynamic memory, which is why §18.1 states
+the round trip semantically. It also means a caller resuming a restored save
+inherits whatever capability bits the writing interpreter advertised, and must
+reassert its own — a Z-machine concern, outside this package by §24, but the
+kind of thing that produces a confusing bug rather than an error.
+
+**What this establishes.** Acceptance criterion 8 for a second implementation.
+D13, D26, D29, D34, and D40 all move from "reasoned about" to "seen". Two of
+§19's fixtures that Frotz could not supply — a save with annotations, a save
+with unknown chunks — are now obtainable from a real interpreter.
+
+**What it does not.**
+
+- **D16 is still completely unexercised.** Two implementations, ten frames
+  between them, and not one has the discard bit set. The read/write asymmetry on
+  the result variable has now survived two chances to be tested.
+- **D2 is still barely probed.** Argument masks `0x00` and `0x01` again, and
+  nothing else, from either interpreter.
+- **D33 is confirmed twice and falsified never**, which is reassuring and not
+  the same as safe: both writers emit the dummy frame, so a writer that omits
+  one remains hypothetical.
+- Acceptance criterion 7 for Bocfel — whether Gargoyle restores what *we* write
+  — is not yet checked.
+- Both interpreters compress, so D6 still has no inbound `UMem` fixture.
