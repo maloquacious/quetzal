@@ -374,6 +374,44 @@ func iotest_oneByteReader(b []byte) io.Reader {
 	return struct{ io.Reader }{bytes.NewReader(b)}
 }
 
+func TestDecodeNilReader(t *testing.T) {
+	if _, err := quetzal.Decode(nil); err == nil {
+		t.Error("Decode(nil): got no error")
+	}
+}
+
+// errReader fails after yielding the first n bytes of b.
+type errReader struct {
+	b   []byte
+	n   int
+	err error
+}
+
+func (r *errReader) Read(p []byte) (int, error) {
+	if r.n <= 0 {
+		return 0, r.err
+	}
+	n := min(len(p), r.n)
+	copy(p, r.b[:n])
+	r.b, r.n = r.b[n:], r.n-n
+	return n, nil
+}
+
+func TestDecodeReaderError(t *testing.T) {
+	// An error from the caller's reader is not malformed input, so it must
+	// reach the caller intact rather than be reported as truncation.
+	want := errors.New("disk on fire")
+	in := ifzs(chunkBytes("IFhd", bytes.Repeat([]byte{0}, 13)))
+
+	_, err := quetzal.Decode(&errReader{b: in, n: 14, err: want})
+	if !errors.Is(err, want) {
+		t.Errorf("Decode: got %v, want %v", err, want)
+	}
+	if errors.Is(err, quetzal.ErrTruncated) {
+		t.Errorf("Decode: reported a reader failure as truncated input: %v", err)
+	}
+}
+
 func TestFileLookup(t *testing.T) {
 	in := ifzs(
 		chunkBytes("IFhd", []byte{1}),
