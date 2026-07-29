@@ -23,6 +23,8 @@ Interoperability tests that shell out to an external interpreter (e.g. Frotz) mu
 
 `specification.md` is the authoritative design document for this package — read the relevant section before implementing or changing anything. It uses RFC 2119 keywords deliberately: MUST items are acceptance criteria (§28), SHOULD items are defaults that can be argued with. Section map: §5 public data model, §7 reading, §9 dynamic memory, §10 stack frames, §11 writing, §14 validation, §15 errors, §16 limits, §24 non-goals, §27 milestones.
 
+`spec-deltas.md` records every deliberate divergence from the spec and the standard, plus the known gaps, each with a stable `D<n>` identifier and an interoperability risk estimate. Read it before concluding that some behavior is a bug, and add an entry when you make a new judgment call.
+
 `references/savefile_14.txt` is the normative Quetzal 1.4 standard by Martin Frost. It is **gitignored on purpose** (no redistribution license) but is present in the working tree — consult it for wire-format details rather than guessing. Do not commit it, and do not commit story files whose redistribution isn't clearly permitted.
 
 ## Architecture constraints that are easy to violate
