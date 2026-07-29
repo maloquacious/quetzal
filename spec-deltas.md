@@ -47,8 +47,8 @@ header, which is why they are enforced rather than masked off.
 builds the byte from a local count and a discard flag cannot set them, which is
 presumably every writer — but this is the delta most likely to reject a file
 from an interpreter nobody has tested. Masking instead of rejecting is a
-one-line change if a real writer turns out to set them. Confirm against actual
-interpreter output rather than assuming.
+one-line change if a real writer turns out to set them. One Frotz 2.55 save
+sets none of them (section 7), which is a start and no more.
 
 ### D2 — Arguments mask: the eighth bit must be zero
 
@@ -56,7 +56,9 @@ interpreter output rather than assuming.
 it on write. A routine takes at most seven arguments, so `0gfedcba` leaves the
 top bit undefined (4.3.4, §5.3).
 
-*Where:* `stack.go`. *Interop risk:* **medium**, for the same reason as D1.
+*Where:* `stack.go`. *Interop risk:* **medium**, for the same reason as D1, and
+less well probed: the only real save examined so far uses just two mask values
+(section 7).
 
 ### D3 — A file holding both `CMem` and `UMem` is rejected
 
@@ -212,7 +214,8 @@ it, so our `CMem` payloads end at the last changed byte.
 
 *Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **medium** — this is
 precisely the case standard 3.4 says readers "must understand", so it is worth
-confirming that the target interpreter does.
+confirming that the target interpreter does. Frotz does it too (section 7),
+which is fair evidence that it also reads it.
 
 ### D18 — Zero runs longer than 256 bytes are split into consecutive runs
 
@@ -221,7 +224,8 @@ gaps become several adjacent maximum-length runs (standard 3.3, §9.3).
 
 *Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **medium**. Real dynamic
 memory has long unchanged stretches, so almost every file we write exercises
-this. Worth a dedicated fixture.
+this — a four-move Frotz save already contains 34 maximum-length runs
+(section 7).
 
 ### D19 — `Header.Encode` writes `Header.Extra` back out
 
@@ -375,7 +379,8 @@ Milestone 5. The pieces exist: `File.Header`, `File.Memory`, `File.Frames`,
 
 ## 6. Fixture checklist for Milestone 6
 
-§19's fixture list, annotated with the deltas each one exercises.
+§19's fixture list, annotated with the deltas each one exercises. Section 7
+records what has actually been checked against another implementation so far.
 
 | Fixture | Exercises |
 |---|---|
@@ -393,3 +398,45 @@ Milestone 5. The pieces exist: `File.Header`, `File.Memory`, `File.Frames`,
 
 The last three are additions to §19's list, one per open gap that only a real
 file can settle.
+
+---
+
+## 7. Interoperability evidence so far
+
+### 2026-07-29 — one Frotz 2.55 save, read successfully
+
+A single save produced by `dfrotz` (Frotz 2.55) from
+`testdata/stories/zork1-r119-880429.z3`, four moves in, read with this package.
+A one-off probe run while restructuring `testdata/`, not a test in the suite.
+Recorded because it is the only contact with another implementation to date.
+
+`Decode`, `File.Header`, `File.Memory`, and `File.Frames` all succeeded, and
+`ValidateFrames` was clean. Nothing in section 1 fired.
+
+**What it establishes.**
+
+| Delta | Observation |
+|---|---|
+| D1 | Flags bytes `0x00 0x01 0x0c 0x07 0x00` — pure local counts. No reserved bit set. |
+| D5, D18 | `CMem` was 289 bytes for 11282 bytes of dynamic memory: 123 literal differences and 83 zero runs, **34 of them at the 256-byte maximum**. Frotz splits long runs, and we decode what it splits. |
+| D17 | The difference stream stops **40 bytes short of the end**. Frotz omits the trailing zero region, so standard 3.4's "must be understood on reads" is a live requirement, not a theoretical one. |
+| D25 | Chunk order was `IFhd`, `CMem`, `Stks` — the order standard 5.4 requires, which we do not enforce but evidently receive. |
+| D3 | `CMem` only; no `UMem` alongside it. |
+| D12, D19 | The `IFhd` payload was exactly 13 bytes, so no `Extra`. |
+
+**What it does not establish.** More than it does, and the gaps matter:
+
+- **D16 is completely unexercised.** Not one frame had the discard bit set, so
+  the result-variable asymmetry has never met a real file.
+- **D2 is barely exercised.** Only `0x00` and `0x01` appeared as arguments
+  masks. A routine called with several arguments would say more.
+- **D6 is unexercised.** Frotz compresses by default, so no `UMem` fixture
+  comes from this route at all.
+- **D27 is untouched.** Zork I carries a checksum, so the pre-checksum gap —
+  the highest-risk entry on this list — remains entirely untested.
+- One interpreter, one version, one game, one position, one direction. Nothing
+  here says anything about files *we* write being accepted elsewhere, which is
+  the half of §19 that matters more.
+
+Treat this as a smoke test that passed, not as evidence that section 1 is
+safe.
