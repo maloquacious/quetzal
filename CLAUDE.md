@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Milestones 1–3 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), and dynamic memory (`memory.go`). Milestone 4 (`Stks`) is next, then the writer, which is why no `Save`, `Read`, or `Write` exists yet. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+Milestones 1–4 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), dynamic memory (`memory.go`), and stack frames (`stack.go`). Milestone 5 is the writer, which is why no `Save`, `Read`, or `Write` exists yet — the pieces they will assemble (`File.Header`, `File.Memory`, `File.Frames`, and the matching `Encode` functions) are all in place. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
 
 ## Commands
 

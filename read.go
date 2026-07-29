@@ -25,6 +25,11 @@ const (
 type File struct {
 	// Chunks holds the FORM's contents in file order.
 	Chunks []Chunk
+
+	// limits records what Decode was configured with, so that later
+	// operations that allocate from a payload honor the same bounds. A File
+	// built by hand leaves this zero and so gets the defaults.
+	limits Limits
 }
 
 // First returns the first chunk with the given identifier.
@@ -123,7 +128,7 @@ func (d *decoder) form() (*File, error) {
 		return nil, prefixed(newErr(ErrInvalidFormat, "expected FORM type %s, found %s", IDIFZS, ft))
 	}
 
-	file := &File{}
+	file := &File{limits: d.limits}
 	for remaining := formLen - formTypeSize; remaining > 0; {
 		c, n, err := d.chunk(remaining)
 		if err != nil {

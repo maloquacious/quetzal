@@ -25,9 +25,11 @@ Implemented so far:
 - Dynamic memory: the `CMem` and `UMem` chunks, compression and decompression of
   the `CMem` difference stream, and reconstruction of a save's dynamic memory
   against its story.
+- Stack frames: the `Stks` chunk, frame decoding and encoding, the dummy frame
+  that versions other than 6 require, and frame validation.
 
-Still to come: stack frames (`Stks`), the file writer, and interoperability
-testing against an established interpreter.
+Still to come: the file writer, and interoperability testing against an
+established interpreter.
 
 ## Install
 
@@ -105,6 +107,29 @@ if err != nil {
 }
 
 fmt.Printf("%d bytes of dynamic memory, saved as %s\n", len(mem.Data), mem.Encoding)
+```
+
+### Walk the call stack
+
+Frames run from the oldest to the newest, so the last one is the call that was
+executing when the game was saved. Evaluation stacks use the same order:
+`Evaluation[0]` is the least recent word and the last element is the top of the
+stack.
+
+```go
+frames, err := save.Frames()
+if err != nil {
+	log.Fatal(err)
+}
+
+for i, frame := range frames {
+	if frame.IsDummy() {
+		fmt.Printf("frame %d: top-level, %d words on the stack\n", i, len(frame.Evaluation))
+		continue
+	}
+	fmt.Printf("frame %d: returns to %#x, %d local(s), %d word(s) on the stack\n",
+		i, frame.ReturnPC, len(frame.Locals), len(frame.Evaluation))
+}
 ```
 
 Errors wrap the sentinels `ErrInvalidFormat`, `ErrStoryMismatch`, `ErrTruncated`,
