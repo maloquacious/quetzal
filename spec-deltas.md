@@ -489,27 +489,45 @@ whole file, so the exposure is limited, but the field currently does nothing.
 
 *Interop risk:* **none**. Security-relevant, and a §16 item.
 
-### D27 — No pre-checksum story support
+### D27 — Pre-checksum stories get a computed checksum
 
-Standard 5.5: if a story has no checksum, the saving interpreter "should
-calculate it in the normal way from the original story file". `ParseStory`
-reads `$1C` literally, so for a story with a zero checksum our `Story.Identity`
-carries zero while a conforming interpreter's save carries a computed value —
-and `Header.Verify` reports a mismatch that is our fault, not the file's.
+**Implemented.** Standard 5.5: if a story has no checksum, the saving
+interpreter "should calculate it in the normal way from the original story
+file". `ParseStory` does so when `$1C` holds zero, and records the fact in
+`Story.ChecksumComputed`. `StoryChecksum` exposes the calculation on its own.
 
-This affects V1 and V2 games and any V3 image with a zero at `$1C`.
-`Header.Matches` documents the situation; nothing fixes it.
+The algorithm is the sum of every byte from `$40` to the declared end of the
+story, modulo `0x10000`, where the length is the word at `$1A` times 2 for
+V1–3, 4 for V4–5, and 8 for V6–8. The declared length is used rather than the
+size of the image, since a story file may carry padding past its end.
 
-The fix is to compute the checksum when `$1C` is zero. The algorithm is the sum
-of every byte from `$40` to the file length, modulo `0x10000`, where the length
-is the word at `$1A` times 2 for V1–3, 4 for V4–5, and 8 for V6–8. Verified
-against all three `testdata` images, whose stored checksums match exactly.
+Three decisions inside it:
 
-*Interop risk:* **high** for pre-checksum games, none otherwise. The most
-likely genuine interoperability failure on this list.
+- **A stored checksum is never recomputed or second-guessed.** If `$1C`
+  disagrees with what the image sums to, the stored value wins. Interpreters
+  compare the stored value and therefore agree with each other; substituting
+  our own arithmetic would break the matching this exists to make work. Only a
+  zero triggers computation.
+- **A story with neither a checksum nor a usable length keeps its zero.** Some
+  of the same early games leave `$1A` unused as well, and there is then no
+  "normal way" to calculate anything — the Z-machine's own definition of the
+  file length is the field that is missing. `StoryChecksum` reports `ok=false`
+  and nothing is invented. `ChecksumComputed` stays false, so a caller can tell
+  this case from a successful computation.
+- **`ChecksumComputed` is exported** rather than kept private, because a
+  `Story.Checksum` that is not the value in the file is surprising, and a
+  server logging story-mismatch errors wants that bit in the log line.
 
-**Accepted for v1.0** — see D43. The fix above is written down and cheap; what
-is missing is a story to test it against.
+*Verification:* recomputing the checksum of all three `testdata` stories
+reproduces their stored values exactly — `0xbf44`, `0x4492`, `0xf645` —
+which is the only evidence available that this is the right algorithm, since no
+pre-checksum story can be committed to test the path that needs it. A synthetic
+version 2 image carries the end-to-end round trip in
+`TestRoundTripPreChecksumStory`.
+
+*Interop risk:* **low**, down from high. What remains is that no real
+pre-checksum story has ever been through it: the arithmetic is confirmed
+against three files, the *decision to apply it* is not. See D43.
 
 ### D28 — No diagnostic mechanism for ignored duplicate chunks
 
@@ -549,34 +567,49 @@ made along the way are D32–D41.
 ### D43 — Only version 3 stories are exercised, and that is an accepted limit for v1.0
 
 Every story fixture is a version 3 Infocom game — Zork I, II, and III — because
-those are the images whose redistribution is clearly permitted (`testdata/`).
-Acquiring a version 1, 2, or 6 story with comparable licensing, or compiling
-one, is out of scope.
+those are the only images whose redistribution is clearly permitted. After D27
+was implemented, **nothing here is a missing feature; what remains is entirely
+untested paths**:
 
-Two entries above therefore stay open, and both are **untested paths rather
-than missing features**. The distinction matters:
+- **Versions 1 and 2.** D27's computed checksum is what these need, and it is
+  now written and verified against three real stories. What has not happened is
+  a real pre-checksum story going through it, which would confirm that
+  computing on a zero at `$1C` is the right trigger and that our arithmetic
+  matches what an interpreter of that era's games records.
+- **Version 6.** Execution begins at a routine, so a V6 save carries no dummy
+  frame. `checkDummyFrame` returns early for version 6 and `ParseStory` accepts
+  versions 1 through 8, so the code handles it — but no real V6 file has run
+  through it, and D33's strictness makes this branch the one where being wrong
+  is most expensive.
 
-- **D27, pre-checksum stories.** Affects version 1 and 2 games, and any image
-  with a zero at `$1C`. Here the code really is wrong: `ParseStory` reads the
-  field literally, so it would disagree with a conforming interpreter. The fix
-  is a dozen lines and the algorithm is recorded in D27; what is missing is a
-  story to prove it against.
-- **D9 and D33, version 6 saves.** Version 6 execution begins at a routine, so
-  a V6 save carries no dummy frame. The code already handles this —
-  `checkDummyFrame` returns early for version 6, and `ParseStory` accepts
-  versions 1 through 8 — but no real V6 file has ever run through it, so the
-  branch is untested rather than unwritten.
+#### Why the fixtures cannot be had
 
-Neither blocks a package whose stated scope is version 3. A release note should
-say so plainly: *tested against version 3 stories; versions 1, 2, and 6 are
-implemented but unexercised, and version 1 and 2 saves are known to mismatch on
-stories with no checksum.*
+Checked 2026-07-29, so that nobody repeats the search. `historicalsource` on
+GitHub hosts the Infocom catalogue — `arthur`, `journey`, `shogun`, `zorkzero`
+for version 6; `deadline`, `starcross`, `suspended`, `witness`, `zork-1` among
+the early games — but **only `zork1`, `zork2`, and `zork3` carry a LICENSE
+file.** Those three are MIT, Copyright Microsoft. Every other Infocom
+repository there has no license at all: it is archived source, not a rights
+grant, and §21 forbids committing story files without clear permission.
 
-Reopen this the day a suitably licensed story of another version turns up. It
-is the cheapest entry on the list to close — the fixtures are the whole cost.
+Those three MIT repositories contain one compiled artifact each —
+`COMPILED/zork1.z3`, `zork2.z3`, `zork3.z3` — which are exactly the three
+fixtures already in `testdata/stories`. There is nothing further to extract
+from that source.
 
-*Interop risk:* **high** for V1 and V2 via D27; **unknown** for V6, which is
-worse than a number, because nothing has looked.
+So this is not a matter of looking harder. Closing it needs a version 1, 2, or
+6 story released under terms that permit redistribution, and no such story is
+known to exist. The fixtures are the entire cost of closing it; they are simply
+not obtainable.
+
+#### What to say in a release note
+
+*Implements Z-machine versions 1 through 8; tested against version 3 stories.
+Versions 1, 2, and 6 are implemented but unexercised, for want of a story file
+that may legally be redistributed as a test fixture.*
+
+*Interop risk:* **low** for V1 and V2, now that D27 is implemented; **unknown**
+for V6, which is worse than a number, because nothing has looked.
 
 ### D42 — `Limits` are not applied when writing
 
@@ -600,7 +633,7 @@ records what has actually been checked against another implementation so far.
 
 | Fixture | Exercises |
 |---|---|
-| Valid compressed save | D4, D5, D27 |
+| Valid compressed save | D4, D5 |
 | Valid uncompressed save | D6 |
 | Save with annotations | D29, D36 |
 | Save with unknown chunks | D26, D36, D40 |

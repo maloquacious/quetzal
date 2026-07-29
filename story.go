@@ -15,6 +15,7 @@ const (
 	offRelease      = 0x02 // 1 word:  release number
 	offStaticMemory = 0x0e // 1 word:  byte address of the base of static memory
 	offSerial       = 0x12 // 6 bytes: serial number
+	offFileLength   = 0x1a // 1 word:  length of the story file, scaled
 	offChecksum     = 0x1c // 1 word:  checksum of the story file
 )
 
@@ -38,9 +39,23 @@ type Story struct {
 
 	// Release, Serial, and Checksum are the values at offsets $2, $12, and
 	// $1C of the story header, which together identify the story.
+	//
+	// Checksum is not always the value stored at $1C. Games written before
+	// the field was used carry zero there, and the format requires the
+	// checksum to be computed from the story image in that case, so that a
+	// save records an identity other interpreters agree with. See
+	// ChecksumComputed and StoryChecksum.
 	Release  uint16
 	Serial   Serial
 	Checksum uint16
+
+	// ChecksumComputed reports that Checksum was computed from the story
+	// image because the header carried none, rather than read from $1C.
+	//
+	// It is worth logging. A story that needs a computed checksum is old
+	// enough that little else about it has been tested, and a save that
+	// fails to match one is the first place to look.
+	ChecksumComputed bool
 
 	// DynamicMemory is the story's original dynamic memory: bytes 0 through
 	// the base of static memory, exclusive. Its length is the length any
@@ -95,7 +110,74 @@ func ParseStory(data []byte) (Story, error) {
 		DynamicMemory: append([]byte(nil), data[:staticBase]...),
 	}
 	copy(s.Serial[:], data[offSerial:offSerial+6])
+
+	// A story from before the checksum field was used carries zero at $1C.
+	// Standard 5.5 requires the saving interpreter to compute the value from
+	// the story image in that case, so reading the field literally would
+	// give this package an identity that no conforming interpreter shares.
+	//
+	// A stored checksum is never second-guessed. If $1C disagrees with what
+	// the image sums to, the story is what it says it is: interpreters
+	// compare the stored value and would all agree with each other, and
+	// silently substituting our own arithmetic would break the very
+	// matching this exists to make work.
+	if s.Checksum == 0 {
+		if sum, ok := StoryChecksum(data); ok {
+			s.Checksum, s.ChecksumComputed = sum, true
+		}
+	}
 	return s, nil
+}
+
+// StoryChecksum computes a story image's checksum the way the Z-machine
+// defines it: the sum of every byte from the end of the 64-byte header to the
+// end of the story, modulo 0x10000.
+//
+// Interpreters normally read this value from offset $1C rather than computing
+// it, and Quetzal records it in IFhd so that a save can be matched to the story
+// it belongs to. Games written before the field came into use carry zero there;
+// standard 5.5 requires the value to be calculated instead, which is what this
+// function is for. ParseStory calls it for exactly those stories.
+//
+// The length of the story comes from the header, not from the size of the
+// image, because a story file may carry padding beyond its declared end. ok is
+// false when the header declares no usable length — true of some of the same
+// early games, which leave that field unused as well — and in that case no
+// checksum can be computed from the image at all.
+//
+// The image is read but neither retained nor modified.
+func StoryChecksum(data []byte) (checksum uint16, ok bool) {
+	if len(data) < storyHeaderSize {
+		return 0, false
+	}
+
+	// The declared length is scaled so that one word can describe a story
+	// larger than 64 KB, by a factor that grew with the Z-machine version.
+	length := int(binary.BigEndian.Uint16(data[offFileLength:offFileLength+2])) * fileLengthScale(data[offVersion])
+	if length <= storyHeaderSize || length > len(data) {
+		return 0, false
+	}
+
+	// The widest possible sum is 0xffff * 8 bytes of 0xff, which is far
+	// inside the range of a uint32; truncating to uint16 is the modulo.
+	var total uint32
+	for _, b := range data[storyHeaderSize:length] {
+		total += uint32(b)
+	}
+	return uint16(total), true
+}
+
+// fileLengthScale returns the factor by which the length at $1A is divided in
+// the given Z-machine version.
+func fileLengthScale(version uint8) int {
+	switch {
+	case version <= 3:
+		return 2
+	case version <= 5:
+		return 4
+	default:
+		return 8
+	}
 }
 
 // StoryMismatchError reports that a save does not belong to the story it was

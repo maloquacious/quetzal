@@ -965,6 +965,67 @@ func TestParseInterpreterData(t *testing.T) {
 	})
 }
 
+// TestRoundTripPreChecksumStory runs the whole chain against a story with no
+// checksum of its own, which is the case standard 5.5 exists for and the one
+// no fixture can cover — every story that may be committed here has a checksum.
+//
+// The synthetic image stands in for a version 1 or 2 game. What it proves is
+// that the computed checksum flows all the way through: into the IFhd this
+// package writes, and back out through the identity check on the way in.
+func TestRoundTripPreChecksumStory(t *testing.T) {
+	image := setFileLength(storyImage(2, 7, "820516", 0, 0x80, 0x400), 0x400)
+
+	story, err := quetzal.ParseStory(image)
+	if err != nil {
+		t.Fatalf("ParseStory: unexpected error: %v", err)
+	}
+	if !story.ChecksumComputed {
+		t.Fatal("the fixture did not need a computed checksum, so nothing was tested")
+	}
+
+	current := append([]byte(nil), story.DynamicMemory...)
+	current[0x70] ^= 0x11
+
+	save := &quetzal.Save{
+		Header: quetzal.Header{
+			Release:  story.Release,
+			Serial:   story.Serial,
+			Checksum: story.Checksum,
+			PC:       0x001234,
+		},
+		Memory: quetzal.Memory{Encoding: quetzal.MemoryCompressed, Data: current},
+		Frames: []quetzal.Frame{{Evaluation: []uint16{0x0042}}},
+	}
+
+	data := writeSave(t, story, save)
+
+	// The checksum in the file must be the computed one, since that is what
+	// another interpreter would have written and will compare against.
+	f, err := quetzal.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("Decode: unexpected error: %v", err)
+	}
+	header, err := f.Header()
+	if err != nil {
+		t.Fatalf("Header: unexpected error: %v", err)
+	}
+	if header.Checksum != story.Checksum {
+		t.Errorf("the written IFhd carries checksum %#04x, want the computed %#04x",
+			header.Checksum, story.Checksum)
+	}
+	if header.Checksum == 0 {
+		t.Error("the written IFhd carries a zero checksum, which is what 5.5 forbids")
+	}
+
+	got, err := quetzal.Read(bytes.NewReader(data), story)
+	if err != nil {
+		t.Fatalf("Read: unexpected error: %v", err)
+	}
+	if !bytes.Equal(got.Memory.Data, current) {
+		t.Error("dynamic memory did not survive the round trip")
+	}
+}
+
 // TestRoundTripRealStories writes a save for each story fixture and reads it
 // back, which is the closest this package can come to the real thing without
 // an interpreter: real dynamic memory, real identities, real sizes.

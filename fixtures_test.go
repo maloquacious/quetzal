@@ -3,6 +3,7 @@
 package quetzal_test
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -88,6 +89,49 @@ func TestStoryFixtures(t *testing.T) {
 			story := loadStory(t, name)
 			t.Logf("version %d, %s, %d bytes of dynamic memory",
 				story.Version, story.Identity(), len(story.DynamicMemory))
+		})
+	}
+}
+
+// TestStoryFixtureChecksums checks the checksum algorithm against real story
+// files, which is the only evidence available that it is the right algorithm.
+//
+// Every fixture stores a checksum at $1C, computed by Infocom's own tools, so
+// recomputing it from the image must reproduce the stored value exactly. This
+// is what makes the computed checksum trustworthy for the pre-checksum games
+// that need it, where no stored value exists to check against — see D27 and
+// D43 in spec-deltas.md.
+func TestStoryFixtureChecksums(t *testing.T) {
+	for _, name := range storyFixtures(t) {
+		t.Run(name, func(t *testing.T) {
+			image, err := os.ReadFile(filepath.Join(storiesDir, name))
+			if err != nil {
+				t.Fatalf("reading the story image: %v", err)
+			}
+
+			stored := binary.BigEndian.Uint16(image[0x1c:0x1e])
+			if stored == 0 {
+				t.Skip("this story carries no checksum, so there is nothing to check against")
+			}
+
+			computed, ok := quetzal.StoryChecksum(image)
+			if !ok {
+				t.Fatal("StoryChecksum: got ok=false; the story declares no usable length")
+			}
+			if computed != stored {
+				t.Errorf("StoryChecksum: got %#04x, but the story header stores %#04x",
+					computed, stored)
+			}
+
+			// And ParseStory must leave the stored value alone.
+			story, err := quetzal.ParseStory(image)
+			if err != nil {
+				t.Fatalf("ParseStory: unexpected error: %v", err)
+			}
+			if story.ChecksumComputed {
+				t.Error("ChecksumComputed: got true for a story that stores its own checksum")
+			}
+			t.Logf("stored %#04x, computed %#04x from %d bytes", stored, computed, len(image))
 		})
 	}
 }

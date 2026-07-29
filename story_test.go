@@ -185,6 +185,194 @@ func TestParseStoryBoundaryStaticBase(t *testing.T) {
 	})
 }
 
+// setFileLength writes the scaled story length that the Z-machine header holds
+// at $1A, which is what a checksum is computed over. storyImage leaves it zero,
+// as the early games that need a computed checksum tend to.
+func setFileLength(image []byte, length int) []byte {
+	scale := 2
+	switch v := image[0x00]; {
+	case v <= 3:
+		scale = 2
+	case v <= 5:
+		scale = 4
+	default:
+		scale = 8
+	}
+	binary.BigEndian.PutUint16(image[0x1a:0x1c], uint16(length/scale))
+	return image
+}
+
+// sumBytes adds up a range of an image the way the Z-machine checksum does,
+// independently of the package, so that the test is not merely the
+// implementation restated.
+func sumBytes(image []byte, from, to int) uint16 {
+	var total uint32
+	for _, b := range image[from:to] {
+		total += uint32(b)
+	}
+	return uint16(total)
+}
+
+func TestStoryChecksum(t *testing.T) {
+	// storyImage fills dynamic memory with 0xaa and static memory with 0x55,
+	// so the sum is over a known pattern rather than over zeros.
+	image := setFileLength(storyImage(3, 1, "000000", 0, 0x80, 0x200), 0x200)
+
+	got, ok := quetzal.StoryChecksum(image)
+	if !ok {
+		t.Fatal("StoryChecksum: got ok=false, want a checksum")
+	}
+	if want := sumBytes(image, 0x40, 0x200); got != want {
+		t.Errorf("StoryChecksum: got %#04x, want %#04x", got, want)
+	}
+
+	t.Run("the declared length is what is summed, not the image size", func(t *testing.T) {
+		// A story file may carry padding past its declared end, which the
+		// checksum must not include.
+		padded := append(append([]byte(nil), image...), bytes.Repeat([]byte{0xff}, 0x100)...)
+		padded = setFileLength(padded, 0x200)
+
+		got, ok := quetzal.StoryChecksum(padded)
+		if !ok {
+			t.Fatal("StoryChecksum: got ok=false, want a checksum")
+		}
+		if want := sumBytes(image, 0x40, 0x200); got != want {
+			t.Errorf("StoryChecksum: got %#04x, want %#04x; the padding was summed", got, want)
+		}
+	})
+
+	t.Run("the scale factor follows the version", func(t *testing.T) {
+		// The same declared length means a different word at $1A in each
+		// version band, so a scale mix-up shows up as a different sum.
+		for _, v := range []uint8{1, 3, 4, 5, 6, 8} {
+			image := setFileLength(storyImage(v, 1, "000000", 0, 0x80, 0x400), 0x400)
+
+			got, ok := quetzal.StoryChecksum(image)
+			if !ok {
+				t.Errorf("version %d: StoryChecksum: got ok=false", v)
+				continue
+			}
+			if want := sumBytes(image, 0x40, 0x400); got != want {
+				t.Errorf("version %d: got %#04x, want %#04x", v, got, want)
+			}
+		}
+	})
+}
+
+func TestStoryChecksumUncomputable(t *testing.T) {
+	tests := []struct {
+		name  string
+		image []byte
+	}{
+		{
+			name: "no declared length, as the earliest games leave it",
+			// storyImage leaves $1A zero.
+			image: storyImage(3, 1, "000000", 0, 0x80, 0x200),
+		},
+		{
+			name:  "a declared length reaching past the image",
+			image: setFileLength(storyImage(3, 1, "000000", 0, 0x80, 0x200), 0x400),
+		},
+		{
+			name:  "a declared length of nothing but the header",
+			image: setFileLength(storyImage(3, 1, "000000", 0, 0x40, 0x100), 0x40),
+		},
+		{
+			name:  "an image shorter than the header",
+			image: storyImage(3, 1, "000000", 0, 0x40, 0x100)[:0x20],
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, ok := quetzal.StoryChecksum(tt.image); ok {
+				t.Errorf("StoryChecksum: got %#04x with ok=true, want ok=false", got)
+			}
+		})
+	}
+}
+
+// TestParseStoryComputesAMissingChecksum covers standard 5.5: a story with no
+// checksum of its own gets one computed, so that the identity this package
+// records is the one a conforming interpreter would record.
+func TestParseStoryComputesAMissingChecksum(t *testing.T) {
+	image := setFileLength(storyImage(3, 42, "820101", 0, 0x80, 0x200), 0x200)
+
+	story, err := quetzal.ParseStory(image)
+	if err != nil {
+		t.Fatalf("ParseStory: unexpected error: %v", err)
+	}
+	if !story.ChecksumComputed {
+		t.Error("ChecksumComputed: got false, want true")
+	}
+	if want := sumBytes(image, 0x40, 0x200); story.Checksum != want {
+		t.Errorf("Checksum: got %#04x, want the computed %#04x", story.Checksum, want)
+	}
+	if story.Checksum == 0 {
+		t.Fatal("the fixture sums to zero, so nothing was tested")
+	}
+
+	t.Run("a save recording the computed checksum matches", func(t *testing.T) {
+		// The point of computing it: a save written by a conforming
+		// interpreter carries the computed value, and must match.
+		header := quetzal.Header{
+			Release:  story.Release,
+			Serial:   story.Serial,
+			Checksum: story.Checksum,
+		}
+		if err := header.Verify(story); err != nil {
+			t.Errorf("Verify: unexpected error: %v", err)
+		}
+
+		// And a save carrying the literal zero from the header does not,
+		// which is the behavior before this change.
+		header.Checksum = 0
+		if err := header.Verify(story); !errors.Is(err, quetzal.ErrStoryMismatch) {
+			t.Errorf("Verify(zero checksum): got %v, want ErrStoryMismatch", err)
+		}
+	})
+}
+
+// TestParseStoryKeepsAStoredChecksum is the other half, and the more important
+// one: a checksum the header does carry is never recomputed or second-guessed.
+// Interpreters compare the stored value, so substituting our own arithmetic
+// would break the matching this is meant to make work.
+func TestParseStoryKeepsAStoredChecksum(t *testing.T) {
+	// A stored checksum that deliberately disagrees with what the image sums
+	// to.
+	image := setFileLength(storyImage(3, 42, "820101", 0x0001, 0x80, 0x200), 0x200)
+	if computed, ok := quetzal.StoryChecksum(image); !ok || computed == 0x0001 {
+		t.Fatalf("the fixture's computed checksum is %#04x, which does not disagree with the stored one", computed)
+	}
+
+	story, err := quetzal.ParseStory(image)
+	if err != nil {
+		t.Fatalf("ParseStory: unexpected error: %v", err)
+	}
+	if story.Checksum != 0x0001 {
+		t.Errorf("Checksum: got %#04x, want the stored 0x0001", story.Checksum)
+	}
+	if story.ChecksumComputed {
+		t.Error("ChecksumComputed: got true, want false")
+	}
+}
+
+// TestParseStoryLeavesAnUncomputableChecksumAlone covers the case this package
+// cannot fix: a story with neither a checksum nor a usable length. Nothing is
+// invented, and the caller can tell from ChecksumComputed that nothing was.
+func TestParseStoryLeavesAnUncomputableChecksumAlone(t *testing.T) {
+	story, err := quetzal.ParseStory(storyImage(3, 1, "000000", 0, 0x80, 0x200))
+	if err != nil {
+		t.Fatalf("ParseStory: unexpected error: %v", err)
+	}
+	if story.Checksum != 0 {
+		t.Errorf("Checksum: got %#04x, want 0", story.Checksum)
+	}
+	if story.ChecksumComputed {
+		t.Error("ChecksumComputed: got true, want false")
+	}
+}
+
 func TestStoryIdentity(t *testing.T) {
 	// A story and a save that came from it must report the same identity, so
 	// that identity comparison is the whole of the matching rule.

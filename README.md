@@ -33,13 +33,12 @@ Implemented so far:
 Still to come: interoperability testing against an established interpreter,
 which is what will decide whether this is finished.
 
-**Version coverage.** The package implements Z-machine versions 1 through 8,
-but is exercised only against version 3 stories, which are the images whose
-redistribution permits committing them as fixtures. Two consequences: a save
-for a version 6 game takes a code path no real file has run through, and a save
-for a story with no checksum at `$1C` — which means most version 1 and 2 games
-— will be reported as belonging to a different story than it does. See D43 and
-D27 in [spec-deltas.md](spec-deltas.md).
+**Version coverage.** The package implements Z-machine versions 1 through 8, but
+is exercised only against version 3 stories, which are the only images whose
+redistribution permits committing them as fixtures. Versions 1, 2, and 6 are
+implemented and untested rather than unsupported — including the computed
+checksum that stories predating the checksum field require. See D43 in
+[spec-deltas.md](spec-deltas.md).
 
 ## Install
 
@@ -86,6 +85,11 @@ for _, chunk := range save.Chunks {
 A save records the release number, serial number, and checksum of the story it
 came from. `Verify` compares them and reports how they differ; `Matches` answers
 the same question as a bool.
+
+Stories written before the Z-machine header carried a checksum hold zero in that
+field, and the format requires an interpreter to compute the value from the story
+image instead. `ParseStory` does so, and sets `Story.ChecksumComputed` to say
+that it did.
 
 ```go
 image, err := os.ReadFile("zork1.z3")
