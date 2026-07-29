@@ -56,16 +56,48 @@ printf 'restore\nzork1-r119-kitchen.qzl\nlook\nquit\ny\n' |
 
 If `look` describes the room you expected, the save is good.
 
+## What is here
+
+| File | Where the game was | Frames | `CMem` |
+|---|---|---|---|
+| `zork1-r119-start.qzl` | West of House, turn 0 | 5 | 218 |
+| `zork1-r119-kitchen.qzl` | Kitchen, 4 moves | 5 | 291 |
+| `zork1-r119-cellar.qzl` | Cellar, 10 moves, lamp lit | 5 | 348 |
+| `zork2-r63-start.qzl` | Inside the Barrow, turn 0 | 5 | 187 |
+| `zork3-r25-start.qzl` | Endless Stair, turn 0 | 5 | 194 |
+
+Each was made with the recipe below and restored in `dfrotz` before being
+committed. `interop_test.go` reads them all.
+
+The Cellar save is the deepest position worth having: it needs the lamp taken
+and lit and the trap door opened, so more of dynamic memory has changed than in
+the others.
+
+```sh
+printf 'north\neast\nopen window\nenter\nwest\ntake lamp\nturn on lamp\nmove rug\nopen trap door\ndown\nsave\nzork1-r119-cellar.qzl\nquit\ny\n' |
+	dfrotz -p -m -w 80 ../stories/zork1-r119-880429.z3
+```
+
+**Every one of these has exactly five frames.** That is not a coincidence and
+not a limitation of the positions chosen: `SAVE` is reached from the same depth
+of the game's main loop wherever the player is, so playing further does not
+produce a deeper or more varied stack. Collecting more Zork saves will not
+improve stack coverage — see D2 and D16 in `../../spec-deltas.md`.
+
 ## What to collect
 
 §19 of `specification.md` lists the fixtures interoperability testing wants,
-and §6 of `spec-deltas.md` maps each one to the decisions it would test. The
-gaps worth a real file most are a version 1 or 2 game (delta D27, the one
-likely to be a genuine bug), a version 6 game, and a save whose chunks are in
-a non-standard order.
+and §6 of `spec-deltas.md` maps each one to the decisions it would test.
 
-Frotz saves compressed memory by default, so a `UMem` fixture needs a different
-interpreter or a hand-built file.
+What is still missing cannot be got from Frotz and Zork:
+
+- A version 1 or 2 game (D27), a version 6 game (D9), or a version 5 or later
+  game (D16). All three are blocked by D43: no story of those versions may be
+  redistributed as a fixture.
+- A save whose chunks are in a non-standard order (D32). Both interpreters
+  write them in the required order.
+- A `UMem` save (D6). Frotz compresses by default, so this needs a different
+  interpreter or a hand-built file. Bocfel compresses too.
 
 Section 7 of `spec-deltas.md` records what one Frotz save has already shown,
 and — more usefully — what it did not reach.
