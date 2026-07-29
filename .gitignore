@@ -1,0 +1,10 @@
+*~
+*.swp
+
+# IDE, agents
+.idea/
+
+# build files
+
+# references
+/references/savefile_14.txt
