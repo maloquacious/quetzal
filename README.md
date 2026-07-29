@@ -30,8 +30,9 @@ Implemented so far:
 - Reading and writing whole saves: `Read`, `Write`, and `Validate`, the copy
   restrictions on interpreter-dependent `IntD` data, and semantic round trips.
 
-Still to come: interoperability testing against an established interpreter,
-which is what will decide whether this is finished.
+Interoperability testing is underway. Saves written by Frotz 2.55 and by Bocfel
+2.5 both load here, and both interpreters restore files this package writes. The
+test suite reads the committed fixtures and needs no interpreter installed.
 
 **Version coverage.** The package implements Z-machine versions 1 through 8, but
 is exercised only against version 3 stories, which are the only images whose

@@ -806,6 +806,21 @@ implementation" is satisfied twice over.
   Frotz restored our `UMem` file — but no real writer has produced one for us
   to read.
 - **The restore was performed by hand and cannot be repeated by `go test`.**
-  Gargoyle is a GUI application. The inbound direction becomes a committed
-  fixture; the outbound direction stays a manual step, recorded here because
-  there is nowhere else to record it.
+  Gargoyle is a GUI application. The inbound direction is now a committed
+  fixture with tests behind it; the outbound direction stays a manual step,
+  recorded here because there is nowhere else to record it.
+
+**Committed.** `testdata/gargoyle/zork1-r119-kitchen.glksave`, remade with the
+story at `/private/tmp/zork/zork1.z3` so that the path in its `IntD` carries no
+username. `interop_test.go` reads it: every committed save must load, match the
+story its name claims, validate, round trip through both encodings, and begin
+with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
+to that file, so that a fixture replaced by one lacking them fails loudly rather
+than quietly testing less.
+
+The two Bocfel saves of the same position — the first probe and this one —
+differed in 106 bytes of dynamic memory, all within `0x2524`–`0x2880`, with the
+first mostly zero there. Reaching the same room twice does not produce the same
+memory: parser and game state outside the player's position differ between
+sessions. Another reason §18.1 is stated semantically, and a reason not to write
+a golden test that compares a save byte for byte against a stored copy.

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Milestones 1–5 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), dynamic memory (`memory.go`), stack frames (`stack.go`), and the writer plus the whole-save layer (`write.go`, `Save`/`Read`/`Write`/`Validate`). Milestone 6 is interoperability; `testdata/frotz/README.md` has the recipe for making fixtures and §7 of `spec-deltas.md` records what has actually been checked against Frotz so far. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+Milestones 1–5 of §27 are done: the IFF container (`read.go`), `IFhd` and story identity (`header.go`, `story.go`), dynamic memory (`memory.go`), stack frames (`stack.go`), and the writer plus the whole-save layer (`write.go`, `Save`/`Read`/`Write`/`Validate`). Milestone 6 is underway: acceptance criteria 7 and 8 are met against Frotz 2.55 and Bocfel 2.5, and `interop_test.go` reads the committed fixtures. §7 of `spec-deltas.md` records every contact with another implementation and — more usefully — what each one did not establish. Work stays on `main` until the GitHub upstream repo exists. Module path is `github.com/maloquacious/quetzal`, Go 1.26.4.
+
+Interop fixtures live in a directory per interpreter (`testdata/frotz`, `testdata/gargoyle`), named `<game>-r<release>-<where>.<ext>` with the interpreter's own extension. `interop_test.go` finds the story from the name, so a misnamed fixture fails there. Frotz is scriptable (`dfrotz`); Gargoyle is a GUI, so its saves and restores are manual — the recipes are in each directory's README. A Gargoyle save's `IntD` embeds the story's absolute path, so make saves with the story somewhere neutral.
 
 Layering, in both directions: `Decode` → `File` → `File.Save` → `Save`, and `Save.Encode` → `File` → `File.WriteTo`. `Read` and `Write` are the two compositions. `Decode`/`File` need no story and judge nothing; `Read`/`Save` require the story and validate.
 
