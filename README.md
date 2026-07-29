@@ -33,6 +33,14 @@ Implemented so far:
 Still to come: interoperability testing against an established interpreter,
 which is what will decide whether this is finished.
 
+**Version coverage.** The package implements Z-machine versions 1 through 8,
+but is exercised only against version 3 stories, which are the images whose
+redistribution permits committing them as fixtures. Two consequences: a save
+for a version 6 game takes a code path no real file has run through, and a save
+for a story with no checksum at `$1C` — which means most version 1 and 2 games
+— will be reported as belonging to a different story than it does. See D43 and
+D27 in [spec-deltas.md](spec-deltas.md).
+
 ## Install
 
 ```sh

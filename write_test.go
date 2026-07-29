@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/maloquacious/quetzal"
@@ -367,6 +368,119 @@ func TestEncodeDoesNotAliasTheSave(t *testing.T) {
 	save.Chunks[0].Data[0] = 'X'
 	if !bytes.Equal(file.Chunks[3].Data, before) {
 		t.Error("the encoded file aliases the save's chunk payloads")
+	}
+}
+
+// TestReadDoesNotAliasTheStory checks the ownership rule that matters most to
+// a caller holding one story and serving many saves from it: nothing a Read
+// returns may share memory with the story it was read against.
+//
+// Sharing would be invisible until it was expensive. A server caching a parsed
+// story and handing it to every request would find one caller's writes to
+// save.Memory.Data corrupting the cached story, and through it every other
+// caller's saves.
+func TestReadDoesNotAliasTheStory(t *testing.T) {
+	for _, encoding := range []quetzal.MemoryEncoding{quetzal.MemoryCompressed, quetzal.MemoryUncompressed} {
+		t.Run(encoding.String(), func(t *testing.T) {
+			story, save := sampleSave(t)
+			data := writeSave(t, story, save, quetzal.WithEncoding(encoding))
+
+			got, err := quetzal.Read(bytes.NewReader(data), story)
+			if err != nil {
+				t.Fatalf("Read: unexpected error: %v", err)
+			}
+
+			// The story must not reach into the save.
+			restored := append([]byte(nil), got.Memory.Data...)
+			for i := range story.DynamicMemory {
+				story.DynamicMemory[i] ^= 0xff
+			}
+			if !bytes.Equal(got.Memory.Data, restored) {
+				t.Error("the save's memory changed when the story's did; Read aliased the story")
+			}
+			for i := range story.DynamicMemory {
+				story.DynamicMemory[i] ^= 0xff
+			}
+
+			// And the save must not reach into the story.
+			original := append([]byte(nil), story.DynamicMemory...)
+			for i := range got.Memory.Data {
+				got.Memory.Data[i] ^= 0xff
+			}
+			if !bytes.Equal(story.DynamicMemory, original) {
+				t.Error("the story's memory changed when the save's did; Read aliased the story")
+			}
+		})
+	}
+}
+
+// TestEncodeDoesNotAliasTheStory checks the same rule in the writing
+// direction. Uncompressed memory is where a zero-copy shortcut would be most
+// tempting, since the payload and the memory are the same bytes.
+func TestEncodeDoesNotAliasTheStory(t *testing.T) {
+	story, save := sampleSave(t)
+
+	file, err := save.Encode(story, quetzal.WithEncoding(quetzal.MemoryUncompressed))
+	if err != nil {
+		t.Fatalf("Encode: unexpected error: %v", err)
+	}
+
+	umem := file.Chunks[1]
+	if umem.ID != quetzal.IDUMem {
+		t.Fatalf("chunk 1 is %s, want %s", umem.ID, quetzal.IDUMem)
+	}
+	payload := append([]byte(nil), umem.Data...)
+
+	for i := range save.Memory.Data {
+		save.Memory.Data[i] ^= 0xff
+	}
+	if !bytes.Equal(umem.Data, payload) {
+		t.Error("the encoded payload changed with the save; Encode aliased the save's memory")
+	}
+}
+
+// TestStorySurvivesConcurrentUse checks that one story can serve many
+// simultaneous reads and writes, which is what a server caching parsed stories
+// will do. It is a race-detector test above all: run it with -race.
+func TestStorySurvivesConcurrentUse(t *testing.T) {
+	story, save := sampleSave(t)
+	want := writeSave(t, story, save)
+
+	before := append([]byte(nil), story.DynamicMemory...)
+
+	const workers = 16
+	results := make([][]byte, workers)
+
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Each worker reads the shared story and writes a save
+			// back against it, with no synchronization of its own.
+			got, err := quetzal.Read(bytes.NewReader(want), story)
+			if err != nil {
+				t.Errorf("worker %d: Read: %v", i, err)
+				return
+			}
+			var buf bytes.Buffer
+			if err := quetzal.Write(&buf, story, got); err != nil {
+				t.Errorf("worker %d: Write: %v", i, err)
+				return
+			}
+			results[i] = buf.Bytes()
+		}()
+	}
+	wg.Wait()
+
+	if !bytes.Equal(story.DynamicMemory, before) {
+		t.Fatal("the shared story was modified")
+	}
+	for i, got := range results {
+		if !bytes.Equal(got, want) {
+			t.Errorf("worker %d produced a different file from the same story and save", i)
+		}
 	}
 }
 

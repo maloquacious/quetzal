@@ -8,6 +8,10 @@ Milestones 1–5 of §27 are done: the IFF container (`read.go`), `IFhd` and sto
 
 Layering, in both directions: `Decode` → `File` → `File.Save` → `Save`, and `Save.Encode` → `File` → `File.WriteTo`. `Read` and `Write` are the two compositions. `Decode`/`File` need no story and judge nothing; `Read`/`Save` require the story and validate.
 
+Version 3 is the tested scope, by decision (D43): the only stories that can be committed are the MIT-released Zorks. Versions 1, 2, and 6 are implemented but unexercised — do not describe them as unsupported, and do not describe them as tested.
+
+The intended caller is a server that caches parsed `Story` values and shares one across concurrent requests. Passing `Story` by value copies the struct but not the bytes behind `DynamicMemory`, so the no-mutation and no-retention guarantees are what make that safe; `TestReadDoesNotAliasTheStory`, `TestEncodeDoesNotAliasTheStory`, and `TestStorySurvivesConcurrentUse` are load-bearing, not decoration.
+
 ## Commands
 
 ```sh

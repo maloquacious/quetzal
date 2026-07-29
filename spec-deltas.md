@@ -508,6 +508,9 @@ against all three `testdata` images, whose stored checksums match exactly.
 *Interop risk:* **high** for pre-checksum games, none otherwise. The most
 likely genuine interoperability failure on this list.
 
+**Accepted for v1.0** — see D43. The fix above is written down and cheap; what
+is missing is a story to test it against.
+
 ### D28 — No diagnostic mechanism for ignored duplicate chunks
 
 §7.2 asks that later instances of a single-instance chunk "be ignored with a
@@ -543,6 +546,38 @@ outright and introducing the option §3.5 anticipates.
 `Save.Encode`, `File.Save`, `File.WriteTo`, and `WithEncoding`. The choices
 made along the way are D32–D41.
 
+### D43 — Only version 3 stories are exercised, and that is an accepted limit for v1.0
+
+Every story fixture is a version 3 Infocom game — Zork I, II, and III — because
+those are the images whose redistribution is clearly permitted (`testdata/`).
+Acquiring a version 1, 2, or 6 story with comparable licensing, or compiling
+one, is out of scope.
+
+Two entries above therefore stay open, and both are **untested paths rather
+than missing features**. The distinction matters:
+
+- **D27, pre-checksum stories.** Affects version 1 and 2 games, and any image
+  with a zero at `$1C`. Here the code really is wrong: `ParseStory` reads the
+  field literally, so it would disagree with a conforming interpreter. The fix
+  is a dozen lines and the algorithm is recorded in D27; what is missing is a
+  story to prove it against.
+- **D9 and D33, version 6 saves.** Version 6 execution begins at a routine, so
+  a V6 save carries no dummy frame. The code already handles this —
+  `checkDummyFrame` returns early for version 6, and `ParseStory` accepts
+  versions 1 through 8 — but no real V6 file has ever run through it, so the
+  branch is untested rather than unwritten.
+
+Neither blocks a package whose stated scope is version 3. A release note should
+say so plainly: *tested against version 3 stories; versions 1, 2, and 6 are
+implemented but unexercised, and version 1 and 2 saves are known to mismatch on
+stories with no checksum.*
+
+Reopen this the day a suitably licensed story of another version turns up. It
+is the cheapest entry on the list to close — the fixtures are the whole cost.
+
+*Interop risk:* **high** for V1 and V2 via D27; **unknown** for V6, which is
+worse than a number, because nothing has looked.
+
 ### D42 — `Limits` are not applied when writing
 
 `Limits` bounds a decode, because a decode allocates from lengths the file
@@ -573,8 +608,8 @@ records what has actually been checked against another implementation so far.
 | Multiple stack frames | D1, D2, D16 |
 | Long zero runs | D18 |
 | Trailing omitted `CMem` differences | D17 |
-| A V1 or V2 game | D27 |
-| A V6 game | D9, D33 (dummy frame absent) |
+| A V1 or V2 game | D27 — *deferred, D43* |
+| A V6 game | D9, D33 (dummy frame absent) — *deferred, D43* |
 | Chunks in a non-standard order | D32 |
 | A save with no dummy frame | D33 |
 | A save carrying an `IntD` chunk | D34, D35, D41 |
