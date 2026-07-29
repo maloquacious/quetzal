@@ -767,10 +767,29 @@ inherits whatever capability bits the writing interpreter advertised, and must
 reassert its own — a Z-machine concern, outside this package by §24, but the
 kind of thing that produces a confusing bug rather than an error.
 
-**What this establishes.** Acceptance criterion 8 for a second implementation.
-D13, D26, D29, D34, and D40 all move from "reasoned about" to "seen". Two of
-§19's fixtures that Frotz could not supply — a save with annotations, a save
-with unknown chunks — are now obtainable from a real interpreter.
+**And Gargoyle restored what we wrote.** The rewrite of Bocfel's own save — 2988
+bytes against its 3098 — was restored in Gargoyle by hand and resumed in the
+Kitchen as expected. Two things follow beyond the criterion itself:
+
+- **Bocfel does not mind losing its own private chunk.** Our rewrite carries no
+  `Bfhs`, because `Save.Chunks` held it but the scrollback it describes was
+  never ours to reproduce — and Bocfel restored anyway. Standard 7.6's rule that
+  interpreters "must not rely on the presence or absence of these chunks" holds
+  in practice for the interpreter's own extension, not just for other people's.
+- **Dropping the machine-specific `IntD` cost nothing.** The reference to the
+  story file went missing, exactly as D34 intends, and the restore did not need
+  it. That is the expected outcome — the user had already chosen the story — but
+  it is the outcome the conservative default was betting on.
+
+**What this establishes.** Acceptance criteria 7 **and** 8 for a second
+implementation: Bocfel reads what we write and we read what Bocfel writes. D13,
+D26, D29, D34, and D40 all move from "reasoned about" to "seen". Two of §19's
+fixtures that Frotz could not supply — a save with annotations, a save with
+unknown chunks — are now obtainable from a real interpreter.
+
+Criteria 7 and 8 are now met against two unrelated implementations, which was
+the point of adding the second one. §19's "at least one independent Quetzal
+implementation" is satisfied twice over.
 
 **What it does not.**
 
@@ -782,6 +801,11 @@ with unknown chunks — are now obtainable from a real interpreter.
 - **D33 is confirmed twice and falsified never**, which is reassuring and not
   the same as safe: both writers emit the dummy frame, so a writer that omits
   one remains hypothetical.
-- Acceptance criterion 7 for Bocfel — whether Gargoyle restores what *we* write
-  — is not yet checked.
-- Both interpreters compress, so D6 still has no inbound `UMem` fixture.
+- Both interpreters compress, so D6 still has no inbound `UMem` fixture. The
+  encoding is known to work outbound in both directions of the standard —
+  Frotz restored our `UMem` file — but no real writer has produced one for us
+  to read.
+- **The restore was performed by hand and cannot be repeated by `go test`.**
+  Gargoyle is a GUI application. The inbound direction becomes a committed
+  fixture; the outbound direction stays a manual step, recorded here because
+  there is nowhere else to record it.
