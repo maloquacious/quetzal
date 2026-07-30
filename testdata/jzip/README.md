@@ -70,5 +70,18 @@ is not a substitute for the test suite.
 It is robust, at least: 283 mutated and hand-built hostile inputs through the
 sanitizer build produced no crash and no sanitizer report.
 
+**Some of its errors are its own.** Three known defects, filed as
+mdhender/jzip#1, #2, and #3, make it reject files that are fine:
+
+- any save carrying an `IntD` chunk, from a one-byte accounting drift;
+- any save carrying a chunk it does not recognise, which standard 8.9 says to
+  skip;
+- any save with bytes after the FORM, which Gargoyle writes on every file.
+
+The practical consequence for this repository: **running `ckifzs` on our rewrite
+of a Gargoyle save reports an error that is not ours.** The `Bfhs` scrollback
+chunk we correctly preserve is one it will not accept. Use a jzip or Frotz save
+as the subject when checking the writer, until those are fixed.
+
 Its verdict on chunk ordering is also the reason D32 stayed strict — see
 section 7 of `../../spec-deltas.md`.
