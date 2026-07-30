@@ -5,9 +5,8 @@ be told to store dynamic memory uncompressed.
 
 ## What jzip is, precisely
 
-jzip 2.1 by John Holder (2000), built from a local fork at
-`mdhender/jzip21`. The distinction matters when weighing what these fixtures
-prove:
+jzip 2.1 by John Holder (2000), built from [a custom fork](https://github.com/mdhender/jzip).
+The distinction matters when weighing what these fixtures prove:
 
 - **`zork1-r119-kitchen.qzl` is `CMem`, written by jzip's own Quetzal code**,
   which dates from 2000 and has never seen this package. Evidence of the same
@@ -53,9 +52,23 @@ ckifzs some-save.qzl
 ```
 
 It prints a chunk listing and then either `Save file is valid.` or a count of
-errors. Every file this package writes has been through it. It is worth
-rerunning after any change to the writer, because it checks things no
+errors, and exits 0 or 1 to match — so `ckifzs f >/dev/null || ...` is all a
+script needs. Every file this package writes has been through it. Worth
+rerunning after any change to the writer, because it checks something no
 round-trip test can: a round trip only proves we agree with ourselves.
+
+**Know what its verdict is worth.** Its own usage text says it "does not do
+in-depth checking", and measurement bears that out. It reports `Save file is
+valid.` for an `IFhd` of 0 or 12 bytes, for a `Stks` whose length is not a whole
+number of frames, for a frame claiming more evaluation words than its chunk
+holds, and for a `CMem` ending in a dangling zero byte — all of which this
+package rejects. So "ckifzs says valid" means the container is sound and the
+required chunks are present and ordered; it does not mean the save is
+well formed. It is a useful independent check on the parts it does cover, and it
+is not a substitute for the test suite.
+
+It is robust, at least: 283 mutated and hand-built hostile inputs through the
+sanitizer build produced no crash and no sanitizer report.
 
 Its verdict on chunk ordering is also the reason D32 stayed strict — see
 section 7 of `../../spec-deltas.md`.

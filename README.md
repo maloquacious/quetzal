@@ -34,8 +34,9 @@ Interoperability testing is underway. Saves written by Frotz 2.55, Bocfel 2.5,
 and jzip 2.1 all load here, and all three restore files this package writes.
 Saving one game position in all three produces dynamic memory that agrees to the
 byte outside the Z-machine header, where each interpreter records its own
-capabilities. `ckifzs`, the conformance checker from the standard, reports every
-file this package writes as valid. The test suite reads the committed fixtures
+capabilities. `ckifzs`, the conformance checker
+distributed with the standard, reports every file this package writes as
+conforming. The test suite reads the committed fixtures
 and needs no interpreter installed.
 
 **Version coverage.** The package implements Z-machine versions 1 through 8. Its

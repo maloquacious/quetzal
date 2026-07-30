@@ -945,6 +945,18 @@ every file this package writes:
 Save file is valid.
 ```
 
+Worth knowing how much that verdict is worth, since it is easy to lean on. Its
+usage text says it "does not do in-depth checking", and it means it: it also
+calls valid an `IFhd` of 0 or 12 bytes, a `Stks` whose length is not a whole
+number of frames, a frame claiming `0xffff` evaluation words inside an 8-byte
+chunk, and a `CMem` ending in a dangling zero — every one of which this package
+rejects. Its "valid" means the container is sound and the required chunks are
+present and in order. On the parts it does cover it is an independent opinion,
+which is what makes it worth running; it is not a second test suite.
+
+It is sturdy, at any rate. 283 mutated and hand-built hostile inputs through its
+sanitizer build produced no crash and no sanitizer report.
+
 Run against the four deliberately broken variants:
 
 | File | ckifzs |
