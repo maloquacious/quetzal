@@ -3,7 +3,7 @@
 package quetzal
 
 // version identifies this package's release, following semantic versioning.
-const version = "0.2.0"
+const version = "0.2.1"
 
 // specVersion identifies the version of the Quetzal Z-Machine Saved Game
 // Standard that this package implements.

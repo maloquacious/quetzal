@@ -323,7 +323,9 @@ func IgnoreMemoryRange(start, end int) CompareOption {
 
 // interpreterHeader is the part of the Z-machine header that the interpreter
 // writes rather than the game, as ranges within dynamic memory. Standard 11.1
-// marks each of these fields as one the interpreter fills in.
+// marks each of these fields as one the interpreter fills in, in the Version
+// that introduced it; this set is the union across Versions and so is wider
+// than any single Version needs. See IgnoreInterpreterHeader.
 var interpreterHeader = []memoryRange{
 	{0x01, 0x02}, // Flags 1: what the interpreter can provide
 	{0x10, 0x12}, // Flags 2: the requests it granted
@@ -347,7 +349,15 @@ var interpreterHeader = []memoryRange{
 // they bury the one difference that was worth looking for.
 //
 // The ranges disregarded are $01, $10 to $11, $1E to $27, $2C to $2D, and $30 to
-// $33.
+// $33. That set is the union across Versions, not the set that applies to the
+// Version of the save being compared: Standard 11.1 introduces $1E to $21 at
+// Version 4, $22 to $27 and $2C to $2D at Version 5, and $30 to $31 at Version 6.
+// On a save below Version 4 those ten bytes are ordinary dynamic memory rather
+// than fields the interpreter owns, and this option disregards them anyway. In
+// practice they are zero on both sides of such a comparison, since neither the
+// game nor the interpreter writes them, so nothing observable is hidden; the
+// option stays declarative rather than making its effect depend on the values it
+// is comparing.
 //
 // Two of those ranges are wider than they strictly need to be. Flags 1 and
 // Flags 2 each mix bits the game sets with bits the interpreter sets, and
