@@ -1334,6 +1334,47 @@ each contact and, more usefully, what each one did not establish.
 
 After v1.0, valid files accepted by a prior minor release SHOULD not become invalid without a standards or security justification.
 
+### 26.1 Files already written
+
+Everything above is about this package: its exported API before v1.0, and what
+its reader accepts after. Neither reaches bytes already on disk, and a caller
+that stores saved games — in a column, a blob, a cache — needs that stated
+separately.
+
+The on-disk format is Quetzal 1.4's, not this package's, and does not move with
+this package's version. Nothing the writer emits records that version: a file it
+produces carries the chunks the standard defines and whatever the caller placed
+in it, and nothing else. `Version()` reports the two versions separately for the
+same reason.
+
+Therefore:
+
+-   A file this package writes MUST remain readable by every later release,
+    before v1.0 as well as after. The latitude granted above before v1.0 is
+    latitude over the exported API, and no stored file depends on the exported
+    API.
+-   The standards or security justification above is the only ground for
+    rejecting a file a prior release accepted, and it applies at every version
+    rather than only after v1.0. Two cases are foreseeable: a reader defect,
+    where this package accepted a file Quetzal 1.4 does not permit; and a
+    default resource limit lowered against hostile input, which a caller can
+    raise again with `WithLimits`, since §16 leaves limits the caller's to set.
+-   A change of either kind MUST be recorded in the changelog as such, rather
+    than left for a caller to discover when stored files stop loading.
+
+Two things are not promised, and a caller designing storage around these bytes
+should know both:
+
+-   **The bytes do not survive a rewrite unchanged.** §18.1 requires a round
+    trip to preserve the state rather than the encoding, and chunk order and
+    memory encoding may differ. A caller SHOULD NOT treat a hash of the file as
+    an identifier of the state it holds, and reading a file into a save
+    deliberately drops the `IntD` chunks §13 forbids copying.
+-   **A save is not self-contained.** It identifies a story (§8) and cannot be
+    reconstructed without it, because compressed memory is a difference against
+    that story's dynamic memory (§9.2). Storing saves means keeping the stories
+    they name.
+
 ## 27. Suggested Initial Milestones
 
 ### Milestone 1 --- IFF container

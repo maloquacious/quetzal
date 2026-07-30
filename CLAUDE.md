@@ -7,7 +7,7 @@ Guidance for coding agents working in this repository.
 - Module: `github.com/maloquacious/quetzal`; Go 1.26; standard library only. The `go` directive stays at the minor version: a patch level propagates to every consumer, so raise it only for a real language or standard-library need.
 - `specification.md` is accepted for v1.0. All milestones and acceptance criteria are complete.
 - Statement coverage is 100%; preserve it. Dead branches often indicate an impossible check rather than a missing test.
-- `Version()` deliberately reports library version `0.2.3` and Quetzal version `1.4`. Do not bump it incidentally.
+- `Version()` deliberately reports library version `0.2.4` and Quetzal version `1.4`. Do not bump it incidentally.
 - Adding, removing, or changing a `.go` file bumps the patch level at least, test files included: they ship in the module zip, so a consumer receives them. A test-only edit is still a release, and so is anything else that changes what a consumer builds against, such as the `go` directive in `go.mod`.
 
 ## Commands

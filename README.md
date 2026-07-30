@@ -56,6 +56,33 @@ one could be found. The code computes such a checksum as the format requires;
 nothing has confirmed it against a story that needs it. See D43 and D27 in
 [spec-deltas.md](spec-deltas.md).
 
+## Stored files
+
+Files this package writes stay readable by later releases. The format on disk is
+Quetzal 1.4's, not this package's: nothing the writer emits records a package
+version, so no API change can reach bytes already saved. The usual caveat that a
+package below v1.0 may still change is a caveat about the Go API, and no stored
+file depends on the Go API. `Version()` reports the package version and the
+Quetzal version separately because the two do not move together.
+
+Only a standards or security justification would make a later release reject a
+file an earlier one accepted — a reader defect being fixed, or a default
+resource limit lowered against hostile input, which a caller can raise again
+with `WithLimits`. Either would be called out in [CHANGELOG.md](CHANGELOG.md).
+
+Two things to know before designing storage around these bytes:
+
+- **A save is not self-contained.** It names its story by release number, serial
+  number, and checksum, and compressed memory is a difference against that
+  story's dynamic memory, so reading one back requires the same story file. Keep
+  the stories along with the saves.
+- **Rewriting a save does not reproduce its bytes.** A round trip preserves the
+  state, not the encoding, so a hash of the file is not an identifier of the
+  position it holds.
+
+[specification.md §26.1](specification.md#261-files-already-written) states this
+as policy, including what would have to be announced if it ever changed.
+
 ## Install
 
 ```sh
