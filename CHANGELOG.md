@@ -15,6 +15,20 @@ usually wants to know:
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-07-30
+
+A build requirement relaxed. No API or behavior changed.
+
+### Changed
+
+- The `go` directive in `go.mod` is now `go 1.26` rather than `go 1.26.4`. Go
+  requires a module's directive to be at least that of everything it depends
+  on, so the patch level was inherited by every consumer: a module depending on
+  this one could not declare `go 1.26`, and builds on Go 1.26.0 through 1.26.3
+  were refused. Nothing here needs a language or standard-library feature added
+  after 1.26.0, and this module has no dependencies of its own to force the
+  level back up. ([#8](https://github.com/maloquacious/quetzal/issues/8))
+
 ## [0.2.2] — 2026-07-30
 
 Documentation, and the test that holds it. No API or behavior changed; the
@@ -104,7 +118,8 @@ three restore files this package writes. `ckifzs`, the conformance checker
 distributed with the standard, reports every file this package writes as
 conforming.
 
-[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/maloquacious/quetzal/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/maloquacious/quetzal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/maloquacious/quetzal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/maloquacious/quetzal/releases/tag/v0.2.0
