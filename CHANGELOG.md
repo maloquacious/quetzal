@@ -15,6 +15,21 @@ usually wants to know:
 
 ## [Unreleased]
 
+### Added
+
+- A README section, **Stored files**, and `specification.md` §26.1 behind it,
+  saying what becomes of a file after it is written. The format on disk is
+  Quetzal 1.4's rather than this package's, and nothing the writer emits records
+  a package version, so a file written by any release stays readable by every
+  later one — before v1.0 as well as after, since the pre-1.0 latitude is over
+  the Go API and no stored file depends on it. §26.1 also names the only two
+  grounds that would break that, requires either to be announced here, and
+  states the two things a caller storing these bytes should not assume: that a
+  rewrite reproduces them, and that a save can be read without its story.
+  ([#9](https://github.com/maloquacious/quetzal/issues/9))
+
+Documentation only. No API or behavior changed, so `Version()` does not move.
+
 ## [0.2.3] — 2026-07-30
 
 A build requirement relaxed. No API or behavior changed.
