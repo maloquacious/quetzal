@@ -7,12 +7,11 @@ import (
 	"fmt"
 )
 
+// The limits a Stks frame's own layout imposes. Both are ceilings on what the
+// format can express, not on what a Z-machine may do, and both are checked by
+// Frame.Validate rather than on reading — a decoded frame cannot exceed either,
+// since each count is read from a field too small to hold a larger number.
 const (
-	// frameHeaderSize is the fixed part of a stack frame: the return PC,
-	// the flags byte, the result variable, the arguments-supplied mask, and
-	// the evaluation-stack word count.
-	frameHeaderSize = 8
-
 	// MaxLocals is the number of local variables a Z-machine routine may
 	// have, and therefore the largest count a frame's flags byte can hold.
 	MaxLocals = 15
@@ -20,6 +19,13 @@ const (
 	// MaxEvaluationWords is the largest evaluation stack a single frame can
 	// record, since the count is stored in one word.
 	MaxEvaluationWords = 0xffff
+)
+
+const (
+	// frameHeaderSize is the fixed part of a stack frame: the return PC,
+	// the flags byte, the result variable, the arguments-supplied mask, and
+	// the evaluation-stack word count.
+	frameHeaderSize = 8
 
 	// flagLocalCount masks the local-variable count out of the flags byte.
 	flagLocalCount = 0x0f
@@ -35,6 +41,10 @@ const (
 )
 
 // Frame is one Z-machine call frame as Quetzal records it.
+//
+// Frames are always handled oldest first, the order the file stores them in,
+// so the last frame of a save is the call that was executing when the game was
+// saved. The first is the dummy frame on every version but 6; see IsDummy.
 type Frame struct {
 	// ReturnPC is the byte address in the story file that the call returns
 	// to. Like every Quetzal program counter it is stored in three bytes,
@@ -82,7 +92,14 @@ func (f Frame) IsDummy() bool {
 		f.Arguments == 0 && len(f.Locals) == 0
 }
 
-// Validate reports whether the frame can be represented in Quetzal.
+// Validate reports whether the frame can be represented in Quetzal: the return
+// program counter must fit in three bytes, the locals in the four bits that
+// count them, the evaluation stack in the word that counts it, and the
+// arguments mask in the seven bits the format defines.
+//
+// Every one of these is a check on a frame a caller built. A frame that came
+// from DecodeStks cannot fail any of them, since each field is read from a
+// place too small to hold a value out of range.
 func (f Frame) Validate() error {
 	if err := f.validate(); err != nil {
 		return prefixed(err)
@@ -116,7 +133,9 @@ func (f Frame) validate() error {
 // Index counts from zero at the oldest frame, the order frames are stored in.
 type FrameError struct {
 	Index int
-	Err   error
+
+	// Err is the underlying problem, and wraps one of the package sentinels.
+	Err error
 }
 
 // Error implements the error interface.

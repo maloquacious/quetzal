@@ -52,7 +52,14 @@ type Memory struct {
 	Data     []byte
 }
 
-// Validate reports whether the memory can be written for the given story.
+// Validate reports whether the memory can be written for the given story: the
+// encoding must be one Quetzal defines, and the data must be exactly as long
+// as the story's dynamic memory.
+//
+// The length is not a formality. Dynamic memory runs from address zero to the
+// base of static memory, which the story header fixes, so memory of any other
+// length does not describe this story — and a compressed difference against it
+// would decode without complaint into something that never existed.
 func (m Memory) Validate(story Story) error {
 	switch m.Encoding {
 	case MemoryCompressed, MemoryUncompressed:

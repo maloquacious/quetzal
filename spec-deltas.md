@@ -789,6 +789,47 @@ option, not a reuse of `Limits`.
 
 *Interop risk:* **none**.
 
+### D44 — What the API review kept, and why
+
+§27's Milestone 7 asks for an "API/documentation review"; this is what it
+concluded. Reading the whole exported surface as `go doc -all` renders it turned
+up four asymmetries that look like oversights and are not. They are recorded
+here because each will be re-noticed by the next person to read the package, and
+an unwritten reason is indistinguishable from an accident.
+
+**`ReadOption` and `WriteOption` are functions over unexported config types.**
+`go doc` renders `func(*readConfig)`, naming a type a caller cannot construct,
+which means this package defines every option there is. Kept: an option here
+names one rule being relaxed or one choice being made (§3.5), and the set of
+rules belongs to the format rather than to callers. An interface with an
+unexported method would hide the wart without changing the fact.
+
+**`DecodeStks` takes `Limits` positionally; `Decode` takes `...ReadOption`.**
+Kept: `IgnoreChunkOrder` is meaningless applied to a bare `Stks` payload, so
+giving `DecodeStks` the option type would offer a caller a setting that does
+nothing. `DecodeCMem` takes no limits at all, because its result is exactly as
+long as the original memory the caller supplied.
+
+**`Parse` and `Decode` name different things.** `Parse` returns one value of
+fixed layout; `Decode` returns however many values the payload describes. The
+rule was consistent already and merely unstated, so it is now in the package
+doc rather than being enforced by a rename.
+
+**`Encode` returns a different type on each receiver** — `[]byte` from
+`Header`, a `Chunk` from `Memory`, a `*File` from `Save`. Kept: each is the
+inverse of the layer it is called on, which is the layering `doc.go` describes
+in both directions.
+
+What the review changed was documentation, not behavior: `Header.Release`,
+`Serial`, and `Checksum` were undocumented despite `Checksum` carrying D27's
+trap, the three one-line `Validate` comments did not say what they checked,
+`MaxPC`/`MaxLocals`/`MaxEvaluationWords` rendered oddly for sharing a `const`
+block with unexported constants, and §22's third required README example —
+modifying metadata or annotations — did not exist. Every Go snippet in the
+README now compiles against the package.
+
+*Interop risk:* **none**.
+
 ---
 
 ## 6. Fixture checklist for Milestone 6

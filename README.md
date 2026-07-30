@@ -14,9 +14,9 @@ Standard (Quetzal), version 1.4](https://ifarchive.org/if-archive/infocom/interp
 
 ## Status
 
-Early development. The API may change until v1.0.
+Feature complete for v1.0, and the API is not expected to change further.
 
-Implemented so far:
+Implemented:
 
 - The IFF container: `FORM`/`IFZS` parsing, chunk parsing, padding, retention of
   unknown chunks, and configurable resource limits.
@@ -177,6 +177,38 @@ save need not have the story it belongs to. The text comes back exactly as it wa
 stored: the format says it holds printable ASCII, but a file that breaks that rule
 still carries what its writer meant, and treating the bytes as untrusted is left
 to whoever displays them.
+
+### Change what a save records about itself
+
+There is no setter. Annotations and the rest live in `Save.Chunks` alongside
+everything else the file carried, and editing that slice is how they change —
+which keeps one rule visible: a chunk this package does not understand is
+carried along untouched, so rewriting a save does not quietly discard what
+another interpreter put in it.
+
+```go
+// Drop any annotation already present and record our own instead.
+var chunks []quetzal.Chunk
+for _, c := range save.Chunks {
+	if c.ID != quetzal.IDANNO {
+		chunks = append(chunks, c)
+	}
+}
+save.Chunks = append(chunks, quetzal.Chunk{
+	ID:   quetzal.IDANNO,
+	Data: []byte("score 25, 140 moves"),
+})
+
+if err := quetzal.Write(out, story, save); err != nil {
+	log.Fatal(err)
+}
+```
+
+Two things the writer will not let you get away with. An `IFhd`, `CMem`, `UMem`,
+or `Stks` chunk in `Save.Chunks` is rejected rather than written, since it would
+contradict the fields that already describe those; and an `IntD` chunk whose
+flags forbid copying is left out when a save is read, so it cannot be carried
+into a file it does not belong to.
 
 ### Read and write whole saves
 

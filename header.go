@@ -8,14 +8,16 @@ import (
 	"strconv"
 )
 
+// MaxPC is the largest program counter a Quetzal file can represent, since
+// program counters are stored as three bytes. It bounds Header.PC and
+// Frame.ReturnPC alike, and writing either beyond it is an error rather than a
+// truncation.
+const MaxPC = 0xffffff
+
 const (
 	// ifhdSize is the size of the IFhd payload defined by Quetzal 1.4. It is
 	// odd, so an IFhd chunk is always written with a pad byte.
 	ifhdSize = 13
-
-	// MaxPC is the largest program counter a Quetzal file can represent,
-	// since program counters are stored as three bytes.
-	MaxPC = 0xffffff
 )
 
 // Serial is a story's six-byte serial number.
@@ -53,6 +55,16 @@ func (i Identity) String() string {
 // Header is the content of a save's IFhd chunk: the identity of the story the
 // save belongs to, and the program counter at which it was saved.
 type Header struct {
+	// Release, Serial, and Checksum identify the story, and are the values
+	// the saving interpreter read from offsets $2, $12, and $1C of its
+	// header. Identity groups the three.
+	//
+	// Checksum is not necessarily what stands at $1C of the story image a
+	// caller holds. A story written before that field came into use carries
+	// zero there and the format requires the value to be computed from the
+	// image instead, so a save of such a story records a checksum its story
+	// file does not contain. Compare with Matches or Verify rather than
+	// against the image, and see Story.ChecksumComputed.
 	Release  uint16
 	Serial   Serial
 	Checksum uint16
@@ -98,7 +110,12 @@ func (h Header) Verify(story Story) error {
 	return prefixed(&StoryMismatchError{Save: h.Identity(), Story: story.Identity()})
 }
 
-// Validate reports whether the header can be represented in Quetzal.
+// Validate reports whether the header can be represented in Quetzal, which at
+// this layer means only that the program counter fits in the three bytes the
+// format gives it.
+//
+// It says nothing about whether the header describes any particular story.
+// That is Verify's question, and it needs one.
 func (h Header) Validate() error {
 	if h.PC > MaxPC {
 		return prefixed(newErr(ErrInvalidFormat,

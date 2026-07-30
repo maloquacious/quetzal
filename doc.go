@@ -36,6 +36,39 @@
 // memory, program counter, and call stack, but need not be the same sequence
 // of bytes, since the format leaves the choice of encoding open.
 //
+// # Naming
+//
+// Three prefixes recur, and each means something:
+//
+//	Parse    turns a payload into one value of fixed layout: ParseHeader,
+//	         ParseStory, ParseInterpreterData.
+//	Decode   turns a payload into however many values it describes:
+//	         Decode, DecodeCMem, DecodeStks.
+//	Validate reports whether a value could be written, without writing it.
+//	         Header, Frame, Memory, and Save each have one; ValidateFrames
+//	         checks a whole call stack against its story.
+//
+// Limits bounds the calls where, and only where, the input decides how much
+// there is to allocate: Decode, which reads a chunk count out of the FORM, and
+// DecodeStks, which reads frame and word counts out of its payload. DecodeCMem
+// needs none, because its result is exactly as long as the original memory the
+// caller supplied, however long the difference stream turns out to be. Decode
+// takes its limits through WithLimits, since it accepts other options too;
+// DecodeStks takes a Limits directly, since none of the other options mean
+// anything to a bare payload.
+//
+// Encode is the inverse of the layer it is called on rather than of any one
+// of these: Header.Encode returns a payload, Memory.Encode returns a Chunk,
+// and Save.Encode returns a whole File.
+//
+// # Options
+//
+// ReadOption and WriteOption configure a call. Both are functions over an
+// unexported type, so this package defines every option there is and a caller
+// cannot write its own. That is deliberate: an option here names one rule
+// being relaxed or one choice being made, and the set of rules is the format's
+// rather than open-ended.
+//
 // # Story data
 //
 // Compressed memory (CMem) is an XOR difference against the story's original

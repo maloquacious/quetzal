@@ -21,6 +21,13 @@ const (
 
 // The range of Z-machine versions this package supports, as represented by
 // Quetzal 1.4.
+//
+// Quetzal is largely version-independent, so the code paths that differ by
+// version are few: whether a save carries the dummy frame (version 6 does not),
+// and how the story's declared length is scaled when a checksum has to be
+// computed. Every version in this range is implemented. Not every one has been
+// exercised against a real story file — see the version-coverage note in the
+// README, which says which and why.
 const (
 	MinVersion = 1
 	MaxVersion = 8

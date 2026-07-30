@@ -32,7 +32,9 @@ var (
 type ChunkError struct {
 	ID     ID
 	Offset int64
-	Err    error
+
+	// Err is the underlying problem, and wraps one of the package sentinels.
+	Err error
 }
 
 // Error implements the error interface.

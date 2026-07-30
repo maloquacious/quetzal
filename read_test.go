@@ -553,6 +553,13 @@ func TestFileLookup(t *testing.T) {
 		t.Errorf("First(IFhd): got %x, want %x (the first instance wins)", ifhd.Data, want)
 	}
 
+	// Ignored means only that nothing is decoded from the second one. It is
+	// still here, which is what D28 offers in place of a diagnostics
+	// facility: All is how a caller sees that a file broke the rule.
+	if got := len(f.All(quetzal.IDIFhd)); got != 2 {
+		t.Errorf("All(IFhd): got %d chunks, want 2 — an ignored duplicate must stay visible", got)
+	}
+
 	// Repeated ANNO chunks are legal and all of them are available.
 	annos := f.All(quetzal.IDANNO)
 	if len(annos) != 2 {
