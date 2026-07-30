@@ -109,6 +109,28 @@
 // performs filesystem or network access as a side effect of parsing. Callers
 // supply story data explicitly.
 //
+// # Stored files
+//
+// A file this package writes stays readable by later releases. The format on
+// disk is Quetzal 1.4's rather than this package's, and nothing the writer
+// emits records a package version, so no change to this API can reach bytes
+// already saved. That holds before v1.0 as well as after: the caveat that a
+// package below v1.0 may still change is a caveat about this API, and no stored
+// file depends on it. Version reports the package version and the Quetzal
+// version separately because the two do not move together.
+//
+// A caller persisting saves should not assume two things. A save is not
+// self-contained: it names its story by release number, serial number, and
+// checksum, and compressed memory is a difference against that story's dynamic
+// memory, so reading one back requires the same story. And rewriting a save
+// does not reproduce its bytes, because a round trip preserves the state rather
+// than the encoding, so a hash of the file does not identify the position it
+// holds.
+//
+// The policy, including what would have to justify a later release rejecting a
+// file an earlier one accepted, is
+// https://github.com/maloquacious/quetzal/blob/main/specification.md#261-files-already-written.
+//
 // # Untrusted input
 //
 // Saved games are binary input from untrusted sources. Every length field in
