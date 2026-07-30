@@ -31,6 +31,7 @@ README Go snippets are compiled examples in `example_test.go`; update both toget
 - **Behavior:** `specification.md`. Read the relevant section before changing semantics.
 - **Quetzal 1.4 wire format:** `references/savefile_14.txt`. It is gitignored because it has no redistribution license; never commit it.
 - **Deliberate divergences and limitations:** `spec-deltas.md`. Check it before treating surprising behavior as a bug, especially D44's intentional API asymmetries.
+- **Testing and debugging facilities:** doc comments plus a GitHub issue. `specification.md` §5.7 puts them outside that document, so do not add spec sections or `spec-deltas.md` entries for them. Comparison (`Compare`, `CompareFiles`, `compare.go`) is the first, and its issue is #1. Such a facility must observe values only: it may not change reading or writing semantics, and one that seems to need a divergence is doing something other than observing.
 
 Do not add deviations from `specification.md` to section 4 of `spec-deltas.md`; that section is closed. Resolve a disagreement by correcting the implementation or specification under §31. A new divergence from Quetzal requires both a `spec-deltas.md` entry and a row in `specification.md` §2.1.
 

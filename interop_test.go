@@ -190,23 +190,24 @@ func TestInteropRoundTripsForeignSaves(t *testing.T) {
 						t.Fatalf("Read(rewritten): %v", err)
 					}
 
-					if !headersEqual(second.Header, first.Header) {
-						t.Errorf("Header: got %+v, want %+v", second.Header, first.Header)
+					// Compare says what changed, where a check per field could
+					// only say that something had. The encoding is the one
+					// difference a deliberate re-encoding is entitled to make.
+					for _, d := range quetzal.Compare(first, second, quetzal.IgnoreMemoryEncoding()) {
+						t.Errorf("the round trip changed the save: %s", d)
 					}
-					if !bytes.Equal(second.Memory.Data, first.Memory.Data) {
-						t.Error("dynamic memory did not survive the round trip")
-					}
-					if !framesEqual(second.Frames, first.Frames) {
-						t.Error("the call stack did not survive the round trip")
-					}
+
+					// Compare groups the additional chunks by identifier, which
+					// is right for two saves of one position but says nothing
+					// about the order they are written in. D36 fixes that order,
+					// so it is checked here.
 					if len(second.Chunks) != len(first.Chunks) {
-						t.Errorf("kept %d additional chunk(s), want %d",
+						t.Fatalf("kept %d additional chunk(s), want %d",
 							len(second.Chunks), len(first.Chunks))
 					}
 					for i := range first.Chunks {
-						if second.Chunks[i].ID != first.Chunks[i].ID ||
-							!bytes.Equal(second.Chunks[i].Data, first.Chunks[i].Data) {
-							t.Errorf("additional chunk %d changed: got %s, want %s",
+						if second.Chunks[i].ID != first.Chunks[i].ID {
+							t.Errorf("additional chunk %d: got %s, want %s",
 								i, second.Chunks[i].ID, first.Chunks[i].ID)
 						}
 					}

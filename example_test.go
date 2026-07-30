@@ -171,8 +171,28 @@ func Example_readAndWriteWholeSaves() {
 	}
 }
 
-// The three helpers below stand in for the setup a README section inherits from
-// the one before it. They are never called: every function above is an example
+func Example_compareTwoSaves() {
+	story := parsedStory()
+
+	ours := readSave("ours.qzl", story)
+	theirs := readSave("dfrotz.qzl", story)
+
+	for _, d := range quetzal.Compare(ours, theirs) {
+		fmt.Println(d)
+	}
+
+	diffs := quetzal.Compare(ours, theirs,
+		quetzal.IgnoreInterpreterHeader(),
+		quetzal.IgnoreMemoryEncoding(),
+		quetzal.IgnoreChunks(quetzal.IDANNO, quetzal.IDIntD),
+	)
+	if len(diffs) != 0 {
+		log.Fatalf("the two interpreters disagree: %v", diffs)
+	}
+}
+
+// The helpers below stand in for the setup a README section inherits from the
+// one before it. They are never called: every function above is an example
 // without an "Output:" comment, so the compiler checks it and the test runner
 // leaves it alone.
 
@@ -217,4 +237,24 @@ func readSaveAndStory() (*quetzal.Save, quetzal.Story) {
 	}
 
 	return save, story
+}
+
+func parsedStory() quetzal.Story {
+	_, story := openSaveAndStory()
+	return story
+}
+
+func readSave(path string, story quetzal.Story) *quetzal.Save {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	save, err := quetzal.Read(f, story)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return save
 }
