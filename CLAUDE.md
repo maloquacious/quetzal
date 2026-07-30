@@ -25,6 +25,12 @@ Other fuzz targets are `FuzzCMem`, `FuzzStacks`, and `FuzzWriteRoundTrip`. Run o
 
 README Go snippets are compiled examples in `example_test.go`; update both together.
 
+`tutorial.md` is held to a stricter standard than the README, because a reader
+still learning cannot tell a stale lesson from their own mistake.
+`tutorial_test.go` runs the tutorial's program against committed fixtures and
+asserts every number it prints, and checks that the markdown's code is the code
+that ran. Changing behavior the tutorial shows means updating all three.
+
 ## Sources of truth
 
 - **Exported API:** declarations and doc comments shown by `go doc -all .`.
