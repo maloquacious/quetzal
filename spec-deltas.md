@@ -299,20 +299,22 @@ we zero would be reading a byte the standard already calls meaningless.
 Standard 3.4 permits this and does not require implementing it on writes. We do
 it, so our `CMem` payloads end at the last changed byte.
 
-*Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **medium** — this is
-precisely the case standard 3.4 says readers "must understand", so it is worth
-confirming that the target interpreter does. Frotz does it too (section 7),
-which is fair evidence that it also reads it.
+*Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **low**, lowered from
+medium. Standard 3.4 says readers "must understand" this, so it needed
+confirming. It is now confirmed twice over in each direction: Frotz and Bocfel
+both *write* streams that stop short of the end (section 7), and both *restored*
+files this package wrote, which use the same shortcut.
 
 ### D18 — Zero runs longer than 256 bytes are split into consecutive runs
 
 One length byte holds `n` for a run of `n+1`, so 256 is the maximum. Longer
 gaps become several adjacent maximum-length runs (standard 3.3, §9.3).
 
-*Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **medium**. Real dynamic
-memory has long unchanged stretches, so almost every file we write exercises
-this — a four-move Frotz save already contains 34 maximum-length runs
-(section 7).
+*Where:* `memory.go`, `EncodeCMem`. *Interop risk:* **low**, lowered from
+medium. Real dynamic memory has long unchanged stretches, so almost every file
+we write exercises this, and both interpreters do the same: a four-move Frotz
+save contains 34 maximum-length runs and Bocfel's 30 (section 7). Files we wrote
+this way restore in both.
 
 ### D19 — `Header.Encode` writes `Header.Extra` back out
 
@@ -321,9 +323,12 @@ longer payload. This is faithful preservation, but it means we can emit an
 `IFhd` whose length is not 13, which an interpreter reading standard 5.4.2
 literally may reject.
 
-*Where:* `header.go`, `Header.Encode`. *Interop risk:* **medium** — but only
-for files that already contained a non-conforming `IFhd`. If this bites, the
-fix is a write option that drops `Extra` rather than a change to the reader.
+*Where:* `header.go`, `Header.Encode`. *Interop risk:* **low**, lowered from
+medium on evidence. A save was written through `Write` with
+`Header.Extra` set, producing a 24-byte `IFhd`, and **Frotz restored it**
+(section 7). So an over-long `IFhd` emitted by this writer is not a file real
+interpreters choke on. If it ever does bite, the fix is a write option that
+drops `Extra` rather than a change to the reader.
 
 ### D20 — Compression is not optimal
 
@@ -681,25 +686,27 @@ option, not a reuse of `Limits`.
 §19's fixture list, annotated with the deltas each one exercises. Section 7
 records what has actually been checked against another implementation so far.
 
-| Fixture | Exercises |
-|---|---|
-| Valid compressed save | D4, D5 |
-| Valid uncompressed save | D6 — *have one, hand-built; no interpreter here writes `UMem`* |
-| Save with annotations | D29, D36 — *have one: Bocfel* |
-| Save with unknown chunks | D26, D36, D40 — *have one: Bocfel's `Bfhs`* |
-| Odd-length chunks and padding | D11 |
-| Multiple stack frames | D1, D2 — *have six, all five frames deep* |
-| A frame with the discard bit set | D16 — *needs a V5+ story, D43* |
-| Long zero runs | D18 |
-| Trailing omitted `CMem` differences | D17 |
-| A V1 or V2 game | D27 — *deferred, D43* |
-| A V6 game | D9, D33 (dummy frame absent) — *deferred, D43* |
-| Chunks in a non-standard order | D32 — *built one; Frotz accepts it, we do not* |
-| A save with no dummy frame | D33 |
-| A save carrying an `IntD` chunk | D34, D35, D41 |
+| Fixture | Deltas | Status |
+|---|---|---|
+| Valid compressed save | D4, D5 | **have 6** — Frotz ×5, Bocfel ×1 |
+| Valid uncompressed save | D6 | **have 1**, hand-built; no interpreter here writes `UMem` |
+| Save with annotations | D29, D36 | **have 1** — Bocfel's `ANNO` |
+| Save with unknown chunks | D26, D36, D40 | **have 1** — Bocfel's 2508-byte `Bfhs` |
+| Odd-length chunks and padding | D11 | **every fixture** — `IFhd` is 13 bytes |
+| Multiple stack frames | D1, D2 | **have 7** — six at 5 frames, one fetched V5 at 7 |
+| A frame with the discard bit set | D16 | **fetched** — Border Zone V5, `testdata/local` |
+| Long zero runs | D18 | **confirmed both ways** — 34 max runs from Frotz, 30 from Bocfel |
+| Trailing omitted `CMem` differences | D17 | **confirmed both ways** — both stop 40 bytes short |
+| Chunks in a non-standard order | D32 | **built in-test**; Frotz accepts it, we do not |
+| A save with no dummy frame | D33 | **built in-test**; Frotz refuses it too |
+| A save carrying an `IntD` chunk | D34, D35, D41 | **have 1** — Bocfel's story-path reference |
+| An `IFhd` longer than 13 bytes | D12, D19 | **built and written**; Frotz restores both |
+| A V6 game | D9 (dummy frame absent) | **story fetchable**, no save — `dfrotz` cannot run V6 |
+| A V1 or V2 game | D27 | **deferred** — no copy exists in any fetchable form |
 
-The last five are additions to §19's list, one per open question that only a
-real file can settle.
+The last seven rows are additions to §19's list, one per question that only a
+real file can settle. Two remain open, and both are D43: a version 6 *save*
+needs Gargoyle and a person, and no version 1 or 2 story has been found at all.
 
 ---
 
@@ -868,6 +875,21 @@ story its name claims, validate, round trip through both encodings, and begin
 with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
 to that file, so that a fixture replaced by one lacking them fails loudly rather
 than quietly testing less.
+
+### 2026-07-29 — an over-long `IFhd`, written by us and read by Frotz
+
+D19 writes `Header.Extra` back out, so a save read from a file with a
+non-conforming `IFhd` is written with the same one. That was rated medium on the
+grounds that nobody knew what an interpreter would do with it.
+
+A save was written through `Write` with `Header.Extra` set to eleven bytes,
+producing a 24-byte `IFhd` — not assembled by hand, so what Frotz saw is what
+`Header.Encode` actually emits. **Frotz restored it**, Kitchen at move 4. The
+round trip also keeps the bytes.
+
+Together with the hand-built variant in the strictness table below, that is both
+directions: Frotz reads an over-long `IFhd` whether we wrote it or not. D19 and
+D12 drop to low.
 
 ### 2026-07-29 — versions 5 and 6, fetched but not shippable
 
