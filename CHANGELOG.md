@@ -15,6 +15,12 @@ usually wants to know:
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-07-30
+
+Documentation, and the test that holds it. No API or behavior changed; the
+version moves because a `.go` file was added, and test files ship in the module
+zip like any other.
+
 ### Added
 
 - `tutorial.md`, a lesson for readers new to Quetzal or to this package. It
@@ -98,6 +104,7 @@ three restore files this package writes. `ckifzs`, the conformance checker
 distributed with the standard, reports every file this package writes as
 conforming.
 
-[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/maloquacious/quetzal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/maloquacious/quetzal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/maloquacious/quetzal/releases/tag/v0.2.0
