@@ -8,6 +8,7 @@ testdata/
 ├── frotz/       save files made by Frotz
 ├── gargoyle/    save files made by Bocfel, under Gargoyle
 ├── handbuilt/   save files this package made itself
+├── local/       stories a maintainer fetched; gitignored
 └── README.md
 ```
 
@@ -68,6 +69,14 @@ its own unregistered chunk, a reference to the story file, and trailing bytes
 past the FORM — so these fixtures cover several things Frotz cannot produce.
 See `gargoyle/README.md`, including the note about the filesystem path embedded
 in the `IntD` chunk.
+
+## local/
+
+Empty in a fresh clone, and ignored by git apart from its README and fetch
+script. Z-machine versions other than 3 can be *fetched* even though they cannot
+be shipped, and several deltas can only be settled by a story of another
+version. `local/fetch.sh` downloads them; the tests use whatever is there and
+skip when there is nothing. See `local/README.md`.
 
 ## handbuilt/
 

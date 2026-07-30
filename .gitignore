@@ -8,3 +8,11 @@
 
 # references
 /references/savefile_14.txt
+
+# Story files and saves a maintainer fetched for local testing. These are
+# Z-machine versions this repository cannot ship, because no story of those
+# versions carries a redistribution licence. See testdata/local/README.md and
+# spec-deltas.md D43. Everything here stays out of git except the instructions.
+/testdata/local/*
+!/testdata/local/README.md
+!/testdata/local/fetch.sh

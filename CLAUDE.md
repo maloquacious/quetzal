@@ -10,7 +10,7 @@ Interop fixtures live in a directory per interpreter (`testdata/frotz`, `testdat
 
 Layering, in both directions: `Decode` → `File` → `File.Save` → `Save`, and `Save.Encode` → `File` → `File.WriteTo`. `Read` and `Write` are the two compositions. `Decode`/`File` need no story and judge nothing; `Read`/`Save` require the story and validate.
 
-Version 3 is the tested scope, by decision (D43): the only stories that can be committed are the MIT-released Zorks, and no V1/V2/V6 story exists under redistributable terms — `historicalsource` was checked, and only its `zork1`/`zork2`/`zork3` repos have a LICENSE. Versions 1, 2, and 6 are implemented but unexercised — do not describe them as unsupported, and do not describe them as tested.
+Version 3 is the committed scope, by decision (D43): only the MIT-released Zorks may be shipped — `historicalsource` was checked, and only its `zork1`/`zork2`/`zork3` repos have a LICENSE. Versions 5 and 6 *can* be fetched into the gitignored `testdata/local/` with `testdata/local/fetch.sh`; `local_test.go` uses them when present and skips otherwise, so a fresh clone and CI still see only V3. Versions 1 and 2 remain unexercised in any form — do not describe them as unsupported, and do not describe them as tested. Never commit anything under `testdata/local/` but its README and fetch script.
 
 `ParseStory` computes the checksum when `$1C` holds zero (standard 5.5, D27) and records that in `Story.ChecksumComputed`. A stored checksum is never recomputed, even if it disagrees with the image: interpreters compare the stored value, so ours must too.
 

@@ -62,13 +62,14 @@ sets none of them (section 7), which is a start and no more.
 it on write. A routine takes at most seven arguments, so `0gfedcba` leaves the
 top bit undefined (4.3.4, §5.3).
 
-*Where:* `stack.go`. *Interop risk:* **medium**, for the same reason as D1, and
-poorly probed for a reason worth knowing: across six fixtures from two
-interpreters and three stories, the only masks that appear are `0x00` and
-`0x01`. Every one of those saves also has exactly five frames, because `SAVE` is
-reached from the same depth of the game's main loop no matter where the player
-is. **Playing further does not produce a more interesting stack**, so collecting
-more Zork saves will not improve this; a different game would be needed.
+*Where:* `stack.go`. *Interop risk:* **medium**, for the same reason as D1.
+Across six committed fixtures from two interpreters the only masks appearing are
+`0x00` and `0x01`, and every one of those saves has exactly five frames, because
+`SAVE` is reached from the same depth of the game's main loop wherever the
+player is. **Playing further does not produce a more interesting stack.** A
+different *game* does: one fetched version 5 save has seven frames and three
+distinct masks — `0b0000`, `0b0011`, `0b0111` — see section 7. Still nothing has
+set the eighth bit, which is the thing this entry rejects.
 
 ### D3 — A file holding both `CMem` and `UMem` is rejected
 
@@ -277,17 +278,18 @@ The asymmetry means `EncodeStks(DecodeStks(x))` is not always byte-identical to
 `x`. That is within §18.1, which requires a *semantic* round trip; `FuzzStacks`
 normalizes for it explicitly.
 
-**No fixture can exercise this, and none ever will while every story is version
-3.** Standard 4.6 sets the `p` bit "on calls made by `CALL_xN`", and
-`CALL_1N`, `CALL_2N`, `CALL_VN`, and `CALL_VN2` are all version 5 and later
-opcodes. In versions 1 through 4 every call stores a result, so a V3 save cannot
-contain a frame with the bit set — which is exactly what six fixtures from two
-interpreters show: zero discards, every time.
+**No committed fixture can exercise this.** Standard 4.6 sets the `p` bit "on
+calls made by `CALL_xN`", and `CALL_1N`, `CALL_2N`, `CALL_VN`, and `CALL_VN2`
+are all version 5 and later opcodes. In versions 1 through 4 every call stores a
+result, so a V3 save cannot contain a frame with the bit set — which is exactly
+what six fixtures from two interpreters show: zero discards, every time.
 
-This moves the entry from "untested, keep looking" to "unreachable with the
-stories available". Closing it needs a version 5 or later story file, which runs
-into the same wall as D43. Until then the behavior rests on reading 4.6, and 4.6
-is unambiguous.
+**A fetched version 5 story settles it.** A Border Zone save read through
+`testdata/local` (section 7) contains `frame 1: DISCARD=true result=0x00`. So
+the bit occurs in real files, and **Frotz stores zero in the result byte**, as
+4.6 asks. The asymmetry this entry describes is therefore invisible in practice:
+there is no non-zero result byte to preserve, and that save round trips byte for
+byte. What `DecodeStks` preserves is a value real writers do not produce.
 
 *Where:* `stack.go`. *Interop risk:* **none** — a writer that reads the byte
 we zero would be reading a byte the standard already calls meaningless.
@@ -615,7 +617,22 @@ untested paths**:
   through it, and D33's strictness makes this branch the one where being wrong
   is most expensive.
 
-#### Why the fixtures cannot be had
+#### Fetchable, if not shippable
+
+Since this entry was written, `testdata/local/` was added: a gitignored
+directory, a `fetch.sh` that downloads version 5 and version 6 stories from
+`historicalsource`, and tests that use whatever is present and skip when it is
+not. That closes the practical half of the problem for a maintainer willing to
+fetch, while leaving the repository shippable. Section 7 records what those
+stories established — D16 exercised, D27's scale factor confirmed in all three
+version bands, D2 better probed.
+
+What it does not change: nothing of this reaches a fresh clone or CI, so every
+entry below still stands as far as the committed suite is concerned. And no
+version 1 or 2 story turned up in fetchable form either, so D27's trigger is
+still untested by any real file.
+
+#### Why the fixtures cannot be committed
 
 Checked 2026-07-29, so that nobody repeats the search. `historicalsource` on
 GitHub hosts the Infocom catalogue — `arthur`, `journey`, `shogun`, `zorkzero`
@@ -630,10 +647,10 @@ Those three MIT repositories contain one compiled artifact each —
 fixtures already in `testdata/stories`. There is nothing further to extract
 from that source.
 
-So this is not a matter of looking harder. Closing it needs a version 1, 2, or
-6 story released under terms that permit redistribution, and no such story is
-known to exist. The fixtures are the entire cost of closing it; they are simply
-not obtainable.
+So this is not a matter of looking harder. Committing a version 1, 2, 5, or 6
+story would need one released under terms that permit redistribution, and no
+such story is known to exist. Fetching one is a different question, answered
+above.
 
 #### What to say in a release note
 
@@ -851,6 +868,61 @@ story its name claims, validate, round trip through both encodings, and begin
 with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
 to that file, so that a fixture replaced by one lacking them fails loudly rather
 than quietly testing less.
+
+### 2026-07-29 — versions 5 and 6, fetched but not shippable
+
+D43 said the stories needed to close the remaining gaps did not exist in
+redistributable form. That is still true, and it turns out to be the wrong
+constraint to have stopped at: a maintainer can *fetch* what the repository
+cannot *ship*. `testdata/local/` is gitignored, `testdata/local/fetch.sh`
+downloads three stories from `historicalsource`, and `local_test.go` uses
+whatever is there and skips when the directory is empty, which is how it is in
+a fresh clone.
+
+| Story | Version | Release | Dynamic memory |
+|---|---|---|---|
+| Border Zone (`spy.z5`) | 5 | 9 | 21562 |
+| Beyond Zork beta (`bzbeta.z5`) | 5 | 1 | 34800 |
+| Journey (`journey.z6`) | 6 | 83 | 15763 |
+
+**D27's scale factor is confirmed across all three version bands.** The story
+length at `$1A` is scaled by 2 for versions 1–3, 4 for 4–5, and 8 for 6 and up,
+and until now only the ×2 branch had ever met a real file. All three stories
+above recompute their stored checksums exactly — `0x2b37`, `0xe040`, `0xd2b8`.
+That is the arithmetic D27 depends on, now checked where it actually varies.
+
+Journey carries 312 bytes of padding past its declared end, which is the case
+that motivated summing to the declared length rather than to the end of the
+image. Worth being precise: **the padding is all zeros, so this file does not
+actually discriminate between the two rules.** It shows the situation is real;
+it does not show the choice was necessary.
+
+**D16 is exercised at last.** A Border Zone save — version 5, seven frames —
+contains a frame with the discard bit set:
+
+```
+frame 1: pc=0x00845e DISCARD=true result=0x00 args=0b0000 locals=1
+```
+
+Two things follow. The bit does occur in practice, so the code path is real
+rather than theoretical. And **Frotz stores zero in the result byte**, which is
+what standard 4.6 asks and what `EncodeStks` writes — so the asymmetry D16
+describes is invisible in practice: there is nothing non-zero to preserve, and
+the round trip of this save is byte-identical, 510 bytes in and 510 out.
+
+That save also carries **three distinct argument masks** — `0b0000`, `0b0011`,
+`0b0111` — against the two that six Zork fixtures managed between them, and
+seven frames rather than the invariable five. A version 5 game exercises the
+stack decoder considerably harder than a version 3 one, which is the concrete
+form of what D2 was complaining about.
+
+**What is still missing.** No version 1 or 2 story could be found in any
+fetchable form — the `historicalsource` copies of the early games are all V3
+re-releases — so D27's *trigger*, a story with no checksum at `$1C`, remains
+untested by any real file. `TestLocalStories` is written to shout if one ever
+turns up. And no version 6 *save* exists yet: `dfrotz` cannot run Journey, since
+the dumb interface has no graphics and the game beeps rather than prompting.
+Gargoyle handles V6, so that one is a manual step nobody has taken.
 
 ### 2026-07-29 — asking Frotz about four non-conforming files
 
