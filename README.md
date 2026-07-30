@@ -30,9 +30,13 @@ Implemented so far:
 - Reading and writing whole saves: `Read`, `Write`, and `Validate`, the copy
   restrictions on interpreter-dependent `IntD` data, and semantic round trips.
 
-Interoperability testing is underway. Saves written by Frotz 2.55 and by Bocfel
-2.5 both load here, and both interpreters restore files this package writes. The
-test suite reads the committed fixtures and needs no interpreter installed.
+Interoperability testing is underway. Saves written by Frotz 2.55, Bocfel 2.5,
+and jzip 2.1 all load here, and all three restore files this package writes.
+Saving one game position in all three produces dynamic memory that agrees to the
+byte outside the Z-machine header, where each interpreter records its own
+capabilities. `ckifzs`, the conformance checker from the standard, reports every
+file this package writes as valid. The test suite reads the committed fixtures
+and needs no interpreter installed.
 
 **Version coverage.** The package implements Z-machine versions 1 through 8. Its
 committed fixtures are all version 3, because those are the only stories whose

@@ -107,11 +107,13 @@ compresses page-at-a-time (3.3) emits adjacent runs, not an overrun.
 
 Both shorter and longer are rejected, per standard 3.6 and §9.1.
 
-*Where:* `memory.go`, `decodeUMem`. *Interop risk:* **low**. The encoding itself
-is now exercised in both directions: Frotz restored a `UMem` file this package
-wrote, and `testdata/handbuilt/zork1-r119-umem.qzl` is a committed one. What has
-never happened is *reading* a `UMem` save produced by another implementation,
-because neither interpreter available here writes one.
+*Where:* `memory.go`, `decodeUMem`. *Interop risk:* **none**, down from low.
+Both directions are exercised by files this package did not write:
+`testdata/jzip/zork1-r119-kitchen-umem.qzl` was written by jzip's `-u` flag and
+is read here, and Frotz and jzip both restore `UMem` files we write. The
+qualification in section 7 stands — jzip's `UMem` path is new code — but the
+gap this entry described, of never having read a `UMem` chunk from elsewhere,
+is closed.
 
 ### D7 — Chunk identifiers must be four printable ASCII characters
 
@@ -173,9 +175,15 @@ rebuilt, and a save missing its dummy frame is still refused.
 Accepting a mis-ordered file does not mean producing one: a save read this way
 is written back in the required order.
 
+**`ckifzs` enforces the same rule.** The conformance checker from standard 9.2
+reports `IFhd must come before CMem, UMem, or Stks` on a mis-ordered file
+(section 7). That reframes this entry: it is not that we are stricter than
+everyone, but that Frotz is lenient where the standard's own checker is not.
+The option stays, because a file Frotz accepts is a file someone may hand us,
+but the default needs no apology.
+
 *Where:* `read.go`, `File.checkOrder`, `IgnoreChunkOrder`. *Interop risk:*
-**low**, with the option; **medium** without it, which is what a caller that
-never sets it still faces.
+**low**.
 
 ### D33 — `Read` validates the save it reconstructs, and so requires the dummy frame
 
@@ -708,8 +716,8 @@ records what has actually been checked against another implementation so far.
 
 | Fixture | Deltas | Status |
 |---|---|---|
-| Valid compressed save | D4, D5 | **have 6** — Frotz ×5, Bocfel ×1 |
-| Valid uncompressed save | D6 | **have 1**, hand-built; no interpreter here writes `UMem` |
+| Valid compressed save | D4, D5 | **have 7** — Frotz ×5, Bocfel ×1, jzip ×1 |
+| Valid uncompressed save | D6 | **have 1** — jzip's `-u` flag |
 | Save with annotations | D29, D36 | **have 1** — Bocfel's `ANNO` |
 | Save with unknown chunks | D26, D36, D40 | **have 1** — Bocfel's 2508-byte `Bfhs` |
 | Odd-length chunks and padding | D11 | **every fixture** — `IFhd` is 13 bytes |
@@ -717,7 +725,7 @@ records what has actually been checked against another implementation so far.
 | A frame with the discard bit set | D16 | **fetched** — Border Zone V5, `testdata/local` |
 | Long zero runs | D18 | **confirmed both ways** — 34 max runs from Frotz, 30 from Bocfel |
 | Trailing omitted `CMem` differences | D17 | **confirmed both ways** — both stop 40 bytes short |
-| Chunks in a non-standard order | D32 | **built in-test**; Frotz accepts it, we do not |
+| Chunks in a non-standard order | D32 | **built in-test**; `ckifzs` rejects it as we do, Frotz accepts it |
 | A save with no dummy frame | D33 | **built in-test**; Frotz refuses it too |
 | A save carrying an `IntD` chunk | D34, D35, D41 | **have 1** — Bocfel's story-path reference |
 | An `IFhd` longer than 13 bytes | D12, D19 | **built and written**; Frotz restores both |
@@ -897,6 +905,64 @@ story its name claims, validate, round trip through both encodings, and begin
 with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
 to that file, so that a fixture replaced by one lacking them fails loudly rather
 than quietly testing less.
+
+### 2026-07-29 — a third interpreter, an uncompressed save, and a conformance checker
+
+jzip 2.1 (John Holder, 2000), from a local fork that adds a `-u` flag for
+uncompressed saves. Three things came out of it, in increasing order of value.
+
+**D6 inbound is closed.** jzip wrote an 11424-byte save whose `UMem` chunk is
+exactly the 11282 bytes of Zork I's dynamic memory, and this package read it.
+Until now no `UMem` file existed that we had not written ourselves, and a
+decoder tested only against its own encoder is not tested.
+
+Worth qualifying rather than overclaiming: the `-u` path is **new code in the
+fork, written in 2026**, so this is evidence that two independent readings of
+standard 3.6 agree — not evidence from a long-established implementation, which
+is what the `CMem` fixtures are. jzip's `CMem` code does date from 2000.
+
+**Three interpreters agree on dynamic memory, to the byte, outside the header.**
+Frotz, Bocfel, and jzip each saved the Kitchen four moves in:
+
+| Pair | Bytes differing | Where |
+|---|---|---|
+| Frotz vs jzip | 10 | `0x1e`–`0x33`, **all inside the 64-byte header** |
+| Frotz vs Bocfel | 107 | `0x01`, plus `0x2524`–`0x2880` from a separate play session |
+| Bocfel vs jzip | 117 | the union of the two above |
+
+Frotz against jzip is the clean comparison, both saved from a scripted run of
+the same moves: **every difference is a header byte** — interpreter number,
+screen dimensions, font metrics — and there are none anywhere else. Three
+programs and two encodings reconstruct the same memory everywhere the
+interpreter is not stamping its own identity on it.
+
+**And `ckifzs` disagrees with Frotz about D32, in our favour.** The same source
+tree builds the conformance checker standard 9.2 mentions. Unlike an
+interpreter, it judges the file rather than trying to play it, and it says of
+every file this package writes:
+
+```
+Save file is valid.
+```
+
+Run against the four deliberately broken variants:
+
+| File | ckifzs |
+|---|---|
+| `IFhd` last | `*** warning: IFhd must come before CMem, UMem, or Stks.` — 1 error |
+| Duplicate `IFhd` | 2 errors |
+| No dummy frame | valid — it does not inspect stack contents |
+| `IFhd` longer than 13 bytes | valid |
+
+So the ordering rule has an enforcer after all. D32 was raised to medium on the
+grounds that our rejection was stricter than the most widely used interpreter;
+the honest reading now is that **Frotz is lenient where the standard's own
+checker is not**, and our behaviour is the conforming one. Lowered again.
+
+A footnote on our writer: its output is byte-for-byte identical to jzip's in
+*both* encodings, as it was with Frotz. Three interpreters now, all reached
+independently. Still a coincidence of compression choices rather than a
+contract, and still not tested for.
 
 ### 2026-07-29 — a version 6 save, and the dummy frame's other half
 

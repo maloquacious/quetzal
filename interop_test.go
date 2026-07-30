@@ -16,7 +16,7 @@ import (
 // Directories of saves written by other people's interpreters, one per
 // interpreter, so that a disagreement points at a program rather than at a
 // pile of files. See testdata/README.md.
-var saveDirs = []string{"testdata/frotz", "testdata/gargoyle"}
+var saveDirs = []string{"testdata/frotz", "testdata/gargoyle", "testdata/jzip"}
 
 // saveFileName matches a save fixture's name:
 //

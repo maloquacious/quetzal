@@ -11,28 +11,38 @@ import (
 	"github.com/maloquacious/quetzal"
 )
 
-// Fixtures nobody's interpreter wrote. See testdata/handbuilt/README.md for why
-// there is only one of them.
 const (
-	handbuiltUMem = "testdata/handbuilt/zork1-r119-umem.qzl"
+	// jzipUMem is the only save here written with uncompressed memory.
+	// Frotz and Bocfel both compress and offer no way not to; jzip has a
+	// flag for it.
+	jzipUMem = "testdata/jzip/zork1-r119-kitchen-umem.qzl"
 
-	// frotzKitchen is the real save the hand-built fixture was derived from,
-	// and the base every variant below is built by mutating.
+	// jzipCMem is the same position, saved by the same interpreter in the
+	// other encoding. Comparing across interpreters would not work: two
+	// programs saving one position legitimately differ in the header bytes
+	// that record interpreter capabilities.
+	jzipCMem = "testdata/jzip/zork1-r119-kitchen.qzl"
+
+	// frotzKitchen is the same game position saved by Frotz, and the base
+	// every deliberately broken variant below is built by mutating.
 	frotzKitchen = "testdata/frotz/zork1-r119-kitchen.qzl"
 )
 
-// TestGoldenUMem covers §19's "valid uncompressed saves", the one fixture on
-// that list no interpreter available here can produce: both Frotz and Bocfel
-// compress by default.
+// TestGoldenUMem covers §19's "valid uncompressed saves".
+//
+// This fixture matters more than its size suggests. Both other interpreters
+// compress and cannot be told not to, so until jzip gained a flag for it,
+// nothing had ever handed this package a UMem chunk it did not write itself —
+// and a decoder tested only against its own encoder is not tested.
 //
 // The state is stated explicitly rather than merely compared, per §21, and is
-// also checked against the compressed save it was built from. Two encodings of
-// one position must reconstruct to the same game, which is the whole claim
-// §18.1 makes about encoding being a free choice.
+// also checked against the same interpreter's compressed save of the same
+// position. Two encodings of one game must reconstruct to the same state, which
+// is the whole claim §18.1 makes about encoding being a free choice.
 func TestGoldenUMem(t *testing.T) {
 	story := loadStory(t, "zork1-r119-880429.z3")
 
-	blob, err := os.ReadFile(handbuiltUMem)
+	blob, err := os.ReadFile(jzipUMem)
 	if err != nil {
 		t.Fatalf("reading the fixture: %v", err)
 	}
@@ -79,19 +89,19 @@ func TestGoldenUMem(t *testing.T) {
 		t.Error("the fixture holds a CMem chunk as well")
 	}
 
-	t.Run("describes the same game as the compressed save", func(t *testing.T) {
-		compressed, err := os.ReadFile(frotzKitchen)
+	t.Run("describes the same game as the compressed save beside it", func(t *testing.T) {
+		compressed, err := os.ReadFile(jzipCMem)
 		if err != nil {
-			t.Fatalf("reading %s: %v", frotzKitchen, err)
+			t.Fatalf("reading %s: %v", jzipCMem, err)
 		}
 		other, err := quetzal.Read(bytes.NewReader(compressed), story)
 		if err != nil {
-			t.Fatalf("Read(%s): %v", frotzKitchen, err)
+			t.Fatalf("Read(%s): %v", jzipCMem, err)
 		}
 
 		if other.Memory.Encoding != quetzal.MemoryCompressed {
 			t.Fatalf("%s is %s, so this comparison tests nothing",
-				frotzKitchen, other.Memory.Encoding)
+				jzipCMem, other.Memory.Encoding)
 		}
 		if !bytes.Equal(save.Memory.Data, other.Memory.Data) {
 			t.Error("the two encodings reconstruct different dynamic memory")

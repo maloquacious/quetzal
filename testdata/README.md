@@ -7,7 +7,7 @@ testdata/
 ├── stories/     Z-machine story files
 ├── frotz/       save files made by Frotz
 ├── gargoyle/    save files made by Bocfel, under Gargoyle
-├── handbuilt/   save files this package made itself
+├── jzip/        save files made by jzip, including uncompressed ones
 ├── local/       stories a maintainer fetched; gitignored
 └── README.md
 ```
@@ -78,9 +78,17 @@ be shipped, and several deltas can only be settled by a story of another
 version. `local/fetch.sh` downloads them; the tests use whatever is there and
 skip when there is nothing. See `local/README.md`.
 
-## handbuilt/
+## jzip/
 
-Saves this package wrote. There is one, holding uncompressed memory, because
-neither interpreter here can be made to produce such a file. A save we wrote
-ourselves proves only what our own code does, so this directory stays as close
-to empty as the fixture list allows. See `handbuilt/README.md`.
+Saves written by jzip, a third interpreter, and the only one that can be told
+to store dynamic memory uncompressed. Its files are also the plainest here —
+three chunks, no annotations, nothing after the FORM. The same source tree
+builds `ckifzs`, the conformance checker from standard 9.2, which is the only
+tool in this repository that judges our output without being our output. See
+`jzip/README.md`.
+
+There is no `handbuilt/` directory any more. It held one uncompressed save,
+made by this package because no interpreter available could produce one; jzip
+now can, and a fixture an interpreter wrote is worth more than one we wrote.
+Deliberately malformed files are still built inside `golden_test.go` rather than
+committed, since §21 prefers a test that states its intent to an opaque blob.
