@@ -8,7 +8,9 @@ Guidance for coding agents working in this repository.
 - `specification.md` is accepted for v1.0. All milestones and acceptance criteria are complete.
 - Statement coverage is 100%; preserve it. Dead branches often indicate an impossible check rather than a missing test.
 - `Version()` deliberately reports library version `0.2.4` and Quetzal version `1.4`. Do not bump it incidentally.
-- Adding, removing, or changing a `.go` file bumps the patch level at least, test files included: they ship in the module zip, so a consumer receives them. A test-only edit is still a release, and so is anything else that changes what a consumer builds against, such as the `go` directive in `go.mod`.
+- Adding, removing, or changing a `.go` file owes the patch level a bump, test files included: they ship in the module zip, so a consumer receives them. A test-only edit counts, and so does anything else that changes what a consumer builds against, such as the `go` directive in `go.mod`.
+- That bump need not land with the change. Documentation-only work collects under `## [Unreleased]` in `CHANGELOG.md`, sometimes over several commits, and the version moves when a tag is cut. So write the changelog entry, leave `version.go` alone, and say in the entry what the change was — not what release it will be in. Behavior changes are the exception: bump with the change, so a report against a version means something.
+- Cutting a tag is one commit that moves `version.go`, `version_test.go`, and the `Version()` line above together, promotes `## [Unreleased]` to a dated section with its compare link, and is followed by an annotated `git tag`. A GitHub release page is optional; the tag is what `go get` needs.
 
 ## Commands
 

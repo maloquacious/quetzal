@@ -4,7 +4,7 @@ Notable changes to this package, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-Two conventions worth stating, because they are what a reader of this file
+Three conventions worth stating, because they are what a reader of this file
 usually wants to know:
 
 - Versions below 1.0 do not promise a stable API. In practice the exported API
@@ -12,6 +12,14 @@ usually wants to know:
   accepted rather than draft.
 - The Quetzal version implemented is 1.4 throughout, and is reported separately
   by `Version()`. It is not this package's version and does not move with it.
+- **A change is not tagged as it lands.** Documentation-only changes in
+  particular collect under Unreleased, sometimes over several commits, and the
+  version moves when a tag is cut rather than when a change is merged. So
+  `Version()` reports the last tag, the default branch may be some commits ahead
+  of it, and Unreleased is where to look for what those commits did. A consumer
+  who wants them before the next tag can `go get` the branch and take the
+  pseudo-version; one who wants only tagged versions loses nothing but time,
+  because a documentation change alters no behavior.
 
 ## [Unreleased]
 
