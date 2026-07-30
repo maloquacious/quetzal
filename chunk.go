@@ -57,6 +57,21 @@ func (id ID) valid() bool {
 	return true
 }
 
+// known reports whether this package assigns a meaning to the identifier.
+//
+// The distinction exists for one reason: an unknown chunk is retained whole
+// because §3.4 says to preserve what is not understood, so unknown payloads are
+// the part of a file whose size is bounded by nothing but the file itself.
+// Limits.MaxUnknownBytes bounds their total, and this is the set it is measured
+// against.
+func (id ID) known() bool {
+	switch id {
+	case IDIFhd, IDCMem, IDUMem, IDStks, IDIntD, IDANNO, IDAUTH, IDCopy:
+		return true
+	}
+	return false
+}
+
 // Chunk is one IFF chunk: a four-byte identifier and its exact payload.
 //
 // Data never includes the pad byte that follows an odd-length chunk. That byte
@@ -66,6 +81,81 @@ type Chunk struct {
 	ID   ID
 	Data []byte
 }
+
+// The three chunks Quetzal defines to hold text (7.2) are read with the
+// helpers below, on both File and Save.
+//
+// Two properties are shared by all of them, and are worth stating once.
+//
+// The text is returned exactly as stored. The format says these chunks hold
+// characters in the range 0x20 to 0x7E and nothing else, but that is not
+// enforced here: a chunk breaking the rule still carries the text its writer
+// meant, and dropping it would discard information for a defect that harms
+// nobody at this layer. Callers displaying the result are displaying bytes
+// chosen by whoever wrote the file, and should treat them accordingly.
+//
+// Nothing about restoring a game depends on them. The format is explicit that
+// these are user-level information and that an interpreter must not rely on
+// their presence or absence (7.6), so a save carrying none of them is in no way
+// deficient.
+
+// text returns the payloads of every chunk with the given identifier, in file
+// order, as strings.
+func text(chunks []Chunk, id ID) []string {
+	var found []string
+	for _, c := range chunks {
+		if c.ID == id {
+			found = append(found, string(c.Data))
+		}
+	}
+	return found
+}
+
+// firstText returns the payload of the first chunk with the given identifier.
+// The format allows only one AUTH and one "(c) " per file, and where it expects
+// one, the first is authoritative.
+func firstText(chunks []Chunk, id ID) (string, bool) {
+	for _, c := range chunks {
+		if c.ID == id {
+			return string(c.Data), true
+		}
+	}
+	return "", false
+}
+
+// Annotations returns the text of every ANNO chunk, in file order.
+//
+// Multiple annotations are legal and mean exactly that: several separate
+// remarks, not one split across chunks. An interpreter might record the score
+// and turn count, or its own name and version; the content is entirely up to
+// whoever wrote the file.
+func (f *File) Annotations() []string { return text(f.Chunks, IDANNO) }
+
+// Author returns the text of the AUTH chunk, which names whoever created the
+// file — on a multi-user system, often just a login name.
+func (f *File) Author() (string, bool) { return firstText(f.Chunks, IDAUTH) }
+
+// Copyright returns the text of the "(c) " chunk: a copyright date and holder,
+// without the symbol itself, which a caller displaying the text supplies. The
+// format notes this is unlikely to be useful on a save file.
+func (f *File) Copyright() (string, bool) { return firstText(f.Chunks, IDCopy) }
+
+// Annotations returns the text of every ANNO chunk, in file order.
+//
+// Multiple annotations are legal and mean exactly that: several separate
+// remarks, not one split across chunks. An interpreter might record the score
+// and turn count, or its own name and version; the content is entirely up to
+// whoever wrote the file.
+func (s *Save) Annotations() []string { return text(s.Chunks, IDANNO) }
+
+// Author returns the text of the AUTH chunk, which names whoever created the
+// file — on a multi-user system, often just a login name.
+func (s *Save) Author() (string, bool) { return firstText(s.Chunks, IDAUTH) }
+
+// Copyright returns the text of the "(c) " chunk: a copyright date and holder,
+// without the symbol itself, which a caller displaying the text supplies. The
+// format notes this is unlikely to be useful on a save file.
+func (s *Save) Copyright() (string, bool) { return firstText(s.Chunks, IDCopy) }
 
 // Sizes and flag bits within an IntD payload.
 const (

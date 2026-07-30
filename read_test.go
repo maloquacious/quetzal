@@ -360,6 +360,99 @@ func TestDecodeLimits(t *testing.T) {
 	})
 }
 
+// TestDecodeUnknownBytesLimit covers Limits.MaxUnknownBytes.
+//
+// It bounds the one part of a save whose size nothing but the file itself
+// constrains. Every chunk this package understands is bounded by what it can
+// validly hold — an IFhd is 13 bytes, a UMem is as long as dynamic memory —
+// but a chunk with no assigned meaning is retained whole precisely because
+// nothing here knows what it should look like.
+func TestDecodeUnknownBytesLimit(t *testing.T) {
+	// Four printable characters, so a valid identifier, and not one this
+	// package assigns any meaning to.
+	unknown := func(n int) []byte {
+		return chunkBytes("Zzz!", bytes.Repeat([]byte{'x'}, n))
+	}
+
+	t.Run("rejects a single chunk over the limit", func(t *testing.T) {
+		_, err := quetzal.Decode(bytes.NewReader(ifzs(unknown(64))),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 32}))
+		if !errors.Is(err, quetzal.ErrLimitExceeded) {
+			t.Errorf("Decode: got %v, want ErrLimitExceeded", err)
+		}
+	})
+
+	t.Run("accumulates across chunks", func(t *testing.T) {
+		// This is the whole reason the limit is separate from
+		// MaxChunkBytes: neither chunk is individually objectionable, and
+		// a file may hold any number of them.
+		in := ifzs(unknown(24), unknown(24))
+
+		if _, err := quetzal.Decode(bytes.NewReader(in),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 48})); err != nil {
+			t.Errorf("Decode at exactly the limit: unexpected error: %v", err)
+		}
+
+		_, err := quetzal.Decode(bytes.NewReader(in),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 47}))
+		if !errors.Is(err, quetzal.ErrLimitExceeded) {
+			t.Errorf("Decode one byte over the limit: got %v, want ErrLimitExceeded", err)
+		}
+	})
+
+	t.Run("charges nothing for chunks this package understands", func(t *testing.T) {
+		// The same payload sizes under identifiers with a meaning. A
+		// limit far below their total must not affect them, or every real
+		// save would be at the mercy of a setting meant for junk.
+		in := ifzs(
+			chunkBytes("IFhd", bytes.Repeat([]byte{0xab}, 13)),
+			chunkBytes("UMem", bytes.Repeat([]byte{0xcd}, 64)),
+			chunkBytes("ANNO", bytes.Repeat([]byte{'a'}, 64)),
+			chunkBytes("IntD", bytes.Repeat([]byte{0}, 64)),
+		)
+		if _, err := quetzal.Decode(bytes.NewReader(in),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 1})); err != nil {
+			t.Errorf("Decode: unexpected error: %v", err)
+		}
+	})
+
+	t.Run("names the chunk that crossed the limit", func(t *testing.T) {
+		_, err := quetzal.Decode(bytes.NewReader(ifzs(unknown(8), unknown(64))),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 32}))
+
+		var ce *quetzal.ChunkError
+		if !errors.As(err, &ce) {
+			t.Fatalf("Decode: got %v, want a *ChunkError", err)
+		}
+		if ce.ID != (quetzal.ID{'Z', 'z', 'z', '!'}) {
+			t.Errorf("ChunkError.ID: got %s, want Zzz!", ce.ID)
+		}
+		// The second chunk is the one that crossed it, not the first: the
+		// offset is past the FORM header, the form type, and the first
+		// chunk entire.
+		want := int64(12 + len(unknown(8)))
+		if ce.Offset != want {
+			t.Errorf("ChunkError.Offset: got %d, want %d", ce.Offset, want)
+		}
+	})
+
+	t.Run("a malformed file is still reported as malformed", func(t *testing.T) {
+		// A chunk that overruns the FORM is wrong in a way worth saying so
+		// about, even though its declared length would also blow the
+		// budget. Diagnosing it as a resource limit would send a caller
+		// looking at its configuration instead of at its file.
+		in := formBytes("IFZS", []byte{
+			'Z', 'z', 'z', '!',
+			0x00, 0x00, 0x10, 0x00, // 4096 bytes, none of them present
+		})
+		_, err := quetzal.Decode(bytes.NewReader(in),
+			quetzal.WithLimits(quetzal.Limits{MaxUnknownBytes: 8}))
+		if !errors.Is(err, quetzal.ErrInvalidFormat) {
+			t.Errorf("Decode: got %v, want ErrInvalidFormat", err)
+		}
+	})
+}
+
 func TestDecodeDoesNotAliasInput(t *testing.T) {
 	// Payloads belong to the returned File. Mutating the caller's buffer
 	// afterwards must not change what was decoded.

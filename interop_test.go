@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -336,16 +337,30 @@ func TestInteropBocfelSpecifics(t *testing.T) {
 	})
 
 	t.Run("the annotation names the interpreter", func(t *testing.T) {
-		// D29. A real ANNO, which Frotz does not write.
-		c, ok := f.First(quetzal.IDANNO)
-		if !ok {
+		// D29. A real ANNO, which Frotz does not write, read through the
+		// helper §12 asks for rather than by hand — so that the helper is
+		// exercised against a chunk this package did not produce.
+		annotations := f.Annotations()
+		if len(annotations) == 0 {
 			t.Fatal("the fixture has no ANNO chunk")
 		}
-		for _, b := range c.Data {
-			if b < 0x20 || b > 0x7e {
-				t.Errorf("ANNO holds byte %#02x, outside the printable ASCII the format requires", b)
+		for _, s := range annotations {
+			for _, b := range []byte(s) {
+				if b < 0x20 || b > 0x7e {
+					t.Errorf("ANNO holds byte %#02x, outside the printable ASCII the format requires", b)
+				}
 			}
+			t.Logf("ANNO: %q", s)
 		}
-		t.Logf("ANNO: %q", c.Data)
+
+		// An annotation is user-level information and must survive being
+		// read as a save and written back out.
+		save, err := quetzal.Read(bytes.NewReader(blob), story)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		if got := save.Annotations(); !slices.Equal(got, annotations) {
+			t.Errorf("Save.Annotations: got %q, want %q", got, annotations)
+		}
 	})
 }

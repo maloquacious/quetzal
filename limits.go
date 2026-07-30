@@ -28,8 +28,15 @@ type Limits struct {
 	// MaxChunkBytes bounds the declared length of any single chunk.
 	MaxChunkBytes uint64
 
-	// MaxUnknownBytes bounds the total payload retained for chunks this
-	// package does not interpret.
+	// MaxUnknownBytes bounds the combined payload of the chunks this package
+	// assigns no meaning to, which it retains whole rather than discarding.
+	// Those are the only chunks whose size nothing but the file itself
+	// constrains: every chunk this package understands is bounded by what it
+	// can validly contain. Reaching this limit is reported against the chunk
+	// that crossed it, before its payload is allocated.
+	//
+	// Real saves come nowhere near the default. Bocfel's scrollback chunk,
+	// the largest unknown chunk seen in practice, is under 3 KB.
 	MaxUnknownBytes uint64
 
 	// MaxFrames bounds the number of stack frames read from Stks.

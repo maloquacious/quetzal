@@ -701,11 +701,22 @@ The test suite MUST exercise at least:
 -   CMem expansion beyond dynamic memory;
 -   incorrect UMem length;
 -   truncated stack frame;
--   local count greater than 15;
+-   local count greater than 15 **on writing**;
 -   stack word count exceeding available bytes;
 -   24-bit PC overflow on writing;
 -   odd-length chunk with missing padding;
+-   aggregate payload of unknown chunks exceeding `MaxUnknownBytes`;
 -   hostile length values intended to cause integer overflow or excessive allocation.
+
+A local count greater than 15 is reachable only on writing, and the list says
+so. The count occupies the low four bits of the frame flags byte, so no value a
+file can store is out of range; the undefined bits around it are masked on read
+rather than rejected (D1, D2). What remains testable is a caller assembling a
+`Frame` with more than 15 locals in memory, which `Frame.Validate` and the
+writer reject. The reading side of this item was never a check that could exist,
+and treating it as one would mean pretending to a guarantee the format does not
+offer: a desynchronized `Stks` stream is caught by running out of payload, not
+by an implausible header.
 
 Fuzzing SHOULD be used for the container, memory, and stack decoders.
 

@@ -29,8 +29,9 @@ Implemented so far:
   that versions other than 6 require, and frame validation.
 - Reading and writing whole saves: `Read`, `Write`, and `Validate`, the copy
   restrictions on interpreter-dependent `IntD` data, and semantic round trips.
+- The text chunks a save may carry: `Annotations`, `Author`, and `Copyright`.
 
-Interoperability testing is underway. Saves written by Frotz 2.55, Bocfel 2.5,
+Interoperability is done. Saves written by Frotz 2.55, Bocfel 2.5,
 and jzip 2.1 all load here, and all three restore files this package writes.
 Saving one game position in all three produces dynamic memory that agrees to the
 byte outside the Z-machine header, where each interpreter records its own
@@ -155,6 +156,28 @@ for i, frame := range frames {
 }
 ```
 
+### Read the text a save carries
+
+A save may carry an annotation, the name of whoever wrote the file, and a
+copyright notice. Interpreters use them for whatever they see fit — Bocfel
+records its own name and version — and nothing about restoring a game depends on
+them, so a save with none of these is in no way deficient.
+
+```go
+for _, note := range save.Annotations() {
+	fmt.Printf("annotation: %s\n", note)
+}
+if author, ok := save.Author(); ok {
+	fmt.Printf("saved by:   %s\n", author)
+}
+```
+
+The same three methods are available on a decoded `File`, so a tool inspecting a
+save need not have the story it belongs to. The text comes back exactly as it was
+stored: the format says it holds printable ASCII, but a file that breaks that rule
+still carries what its writer meant, and treating the bytes as untrusted is left
+to whoever displays them.
+
 ### Read and write whole saves
 
 The examples above take a save apart a piece at a time. `Read` does all of it at
@@ -210,7 +233,9 @@ as a `*FrameError` naming the frame.
   Reads are bounds-checked, arithmetic is overflow-safe, allocations are limited,
   and malformed input returns an error instead of panicking.
 - **Information is preserved.** Unknown chunks are kept, in order, rather than
-  treated as errors.
+  treated as errors — up to a configurable total, since a chunk nothing
+  understands is the one part of a file whose size nothing but the file itself
+  constrains.
 
 ## Testing
 

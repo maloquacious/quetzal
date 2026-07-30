@@ -56,6 +56,15 @@ out of payload rather than by an obviously wrong header. That remains a *bounds*
 check — nothing is allocated before a frame is known to fit, and `MaxFrames` and
 `MaxStackWords` still apply — so what degrades is diagnosis, not safety.
 
+One consequence surfaced later, in Milestone 7. §20's malformed-input list asks
+for a test of "local count greater than 15", and there is no such file: the
+count is the low four bits of this byte, so every value it can hold is legal,
+and with the top three bits masked a frame header can no longer be structurally
+invalid at all. The item is reachable only on the writing side, where
+`Frame.Validate` and the writer reject a hand-built `Frame` carrying more than
+`MaxLocals`. §20 now says so rather than implying a reading check that cannot
+exist.
+
 *Where:* `stack.go`, `DecodeStks`. *Interop risk:* **none**, down from medium.
 Nothing can be rejected for these bits any more.
 
@@ -535,11 +544,35 @@ where the check lives.
 
 ### D26 — `Limits.MaxUnknownBytes` is declared but never enforced
 
-Nothing sums the payloads of chunks the package does not interpret.
-`MaxChunkBytes` bounds each chunk individually and `MaxFormBytes` bounds the
-whole file, so the exposure is limited, but the field currently does nothing.
+**Resolved in Milestone 7.** The decoder now charges every chunk whose
+identifier it assigns no meaning to against a running total, and rejects the
+chunk that crosses `MaxUnknownBytes` before allocating its payload.
+`ID.known()` is the set it is measured against: `IFhd`, `CMem`, `UMem`, `Stks`,
+`IntD`, `ANNO`, `AUTH`, and `(c) `.
 
-*Interop risk:* **none**. Security-relevant, and a §16 item.
+Three decisions inside it:
+
+- **The check follows the FORM-overrun check rather than preceding it.** A
+  chunk whose declared length runs past the end of the FORM would also blow the
+  budget, and reporting that as a resource limit would send a caller to look at
+  its configuration instead of at its file. Malformed is diagnosed as malformed.
+- **Known chunks are charged nothing at all**, not merely counted separately.
+  Every chunk this package understands is bounded by what it can validly
+  contain — an `IFhd` is 13 bytes, a `UMem` is as long as dynamic memory — so
+  including them would put ordinary saves at the mercy of a setting that exists
+  for junk.
+- **The error is a `ChunkError` naming the chunk that crossed the limit**,
+  which is the one a caller would have to remove, not the first unknown chunk
+  in the file.
+
+Why a separate limit was worth having: `MaxChunkBytes` bounds each chunk on its
+own and `MaxFormBytes` bounds the file, but neither bounds *how many* chunks a
+file may spend on payloads nothing will read. Bocfel's `Bfhs` — 2508 bytes of
+scrollback, the largest unknown chunk seen in practice — is three orders of
+magnitude under the 4 MiB default, so nothing real is near it.
+
+*Interop risk:* **none**. Security-relevant, and a §16 item; it closes the hole
+in acceptance criterion 11.
 
 ### D27 — Pre-checksum stories get a computed checksum
 
@@ -583,23 +616,72 @@ against three files, the *decision to apply it* is not. See D43.
 
 ### D28 — No diagnostic mechanism for ignored duplicate chunks
 
+**Resolved by documentation in Milestone 7**, on the argument that the
+mechanism already exists and was merely unnamed.
+
 §7.2 asks that later instances of a single-instance chunk "be ignored with a
-diagnostic mechanism if diagnostics are enabled". They are ignored silently;
-there is no diagnostics facility.
+diagnostic mechanism if diagnostics are enabled". No diagnostics facility was
+ever built, and none is now. What was overlooked is that *ignored* here has
+only ever meant "nothing is decoded from it": `Decode` retains every chunk it
+reads, duplicates included, so `File.All(IDIFhd)` returning two chunks **is**
+the diagnostic. `File.First` and `File.All` now say so, and name the callers
+that would want it — a save-file inspector, or a server logging what it was
+handed.
+
+The alternative was a `ReadOption` taking a callback, and it was rejected. It
+would add API surface, an ordering question (are diagnostics reported before or
+after the error that abandons the decode?), and a second way to learn something
+the data model already reports — for a rule that fires on files no interpreter
+in the fixture set produces. §3.5's shape for options is "name the rule being
+overlooked", and there is no rule being overlooked here.
+
+Two limits are worth stating so the resolution is not read as broader than it
+is. `Save` does not carry duplicates, by D40, so a caller wanting this must ask
+the `File` — which means calling `Decode` and `File.Save` rather than `Read`.
+And a *duplicate* is distinguishable from a legitimately repeated chunk only by
+knowing which identifiers Quetzal allows one of; the package does not encode
+that judgment anywhere a caller can query.
 
 *Interop risk:* **none**.
 
 ### D29 — No text-chunk helpers
 
-§12's `Annotations` and `Author` helpers do not exist. Both chunk kinds survive
-as raw chunks in `Save.Chunks` and in the decoded `File`, so nothing is lost;
-what is missing is the convenience of reading them as text.
+**Resolved in Milestone 7.** `Annotations`, `Author`, and `Copyright` exist on
+both `File` and `Save`. §13's `InterpreterData` had already been built, along
+with the copy restrictions it was needed for — see D34 and D41.
 
-§13's `InterpreterData` **does** now exist, along with the copy restrictions it
-was needed for — see D34 and D41. That half of this entry is resolved.
+Four decisions, since the helpers are thin enough that the choices are most of
+what there is:
+
+- **The text is returned exactly as stored.** Standard 7.2 says these chunks
+  hold characters in `0x20`–`0x7E` and nothing else, and that is not enforced:
+  a chunk breaking the rule still carries the text its writer meant, and
+  dropping or rewriting it would discard information for a defect that harms
+  nobody at this layer. §3.4 governs. The doc comment says so and tells callers
+  displaying the result that they are displaying bytes someone else chose;
+  `TestTextChunksReturnStoredBytes` pins it, escape sequence and all, so the
+  choice stays deliberate rather than becoming something discovered later.
+- **`Copyright` was added although §12 does not list it.** §12 names `AUTH`,
+  `(c) `, and `ANNO` as the chunks to recognize but sketches helpers for only
+  two of them. Leaving the third out would mean a caller assembling the
+  identifier by hand, and `(c) ` is three characters and a trailing space — get
+  the space wrong and the chunk is silently absent rather than malformed. That
+  is exactly the mistake a helper should absorb.
+- **They exist on `File` as well as on `Save`.** §12 sketches them on `*Save`.
+  But `Decode` is the entry point for inspecting a save without its story, and
+  an annotation is the single most inspectable thing a save contains, so
+  requiring a story image to read one would be backwards.
+- **`Author` and `Copyright` return the first instance**, per 7.3 and 7.4
+  ("there should only be one such chunk per file") and the general
+  first-instance rule; `Annotations` returns all of them, since multiple `ANNO`
+  chunks mean multiple annotations rather than one split across chunks.
 
 *Interop risk:* **none**. The chunks round-trip whether or not anything
-interprets them.
+interprets them, which is what §12's closing MUST NOT requires.
+
+*Verification:* exercised against Bocfel's real `ANNO`, `"Interpreter: Bocfel
+2.5"`, in `TestInteropBocfelSpecifics` — read through the helper rather than by
+hand, so that it is tested against a chunk this package did not write.
 
 ### D30 — Lenient mode: one option exists, and most rules need none
 

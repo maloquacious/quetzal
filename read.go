@@ -40,7 +40,9 @@ type File struct {
 // First returns the first chunk with the given identifier.
 //
 // Where Quetzal expects a single instance of a chunk, the first is
-// authoritative and later instances are ignored.
+// authoritative and later instances are ignored. Ignored here means only that
+// nothing is decoded from them: a File keeps every chunk it read, so All
+// reports the duplicates this returns one of.
 func (f *File) First(id ID) (Chunk, bool) {
 	for _, c := range f.Chunks {
 		if c.ID == id {
@@ -52,6 +54,11 @@ func (f *File) First(id ID) (Chunk, bool) {
 
 // All returns every chunk with the given identifier, in file order. Repeated
 // chunks are legal in IFF; ANNO in particular may appear more than once.
+//
+// For chunks Quetzal allows only one of, this is also how a caller sees that a
+// file broke the rule. Such a duplicate is not an error and does not reach a
+// Save, so a caller wanting to report one — a save-file inspector, or a server
+// logging what it was handed — asks here, before or instead of calling Save.
 func (f *File) All(id ID) []Chunk {
 	var found []Chunk
 	for _, c := range f.Chunks {
@@ -230,8 +237,9 @@ func IgnoreChunkOrder() ReadOption {
 // Decode verifies that the input is a FORM of type IFZS, that every chunk lies
 // within the FORM, and that odd-length chunks carry their pad byte. It does
 // not check that the chunks required by Quetzal are present, nor interpret any
-// payload; that is Read's work. Unknown chunks are retained rather than
-// treated as errors.
+// payload; that is Read's work. Chunks this package assigns no meaning to are
+// retained rather than treated as errors, up to Limits.MaxUnknownBytes in
+// total.
 //
 // Decode stops at the end of the FORM. Any bytes following it are neither
 // consumed nor examined, since a simple IFF file is a single FORM chunk.
@@ -261,6 +269,10 @@ type decoder struct {
 
 	// ignoreChunkOrder is carried into the File so that Save honors it.
 	ignoreChunkOrder bool
+
+	// unknownBytes is the payload retained so far for chunks this package
+	// does not interpret, which Limits.MaxUnknownBytes bounds.
+	unknownBytes uint64
 }
 
 // form parses the outer FORM chunk and its contents.
@@ -336,6 +348,23 @@ func (d *decoder) chunk(remaining uint64) (Chunk, uint64, error) {
 		return Chunk{}, 0, &ChunkError{ID: id, Offset: offset,
 			Err: newErr(ErrInvalidFormat, "length %d overruns the end of the FORM by %d byte(s)",
 				size, padded-(remaining-chunkHeaderSize))}
+	}
+
+	// A chunk this package does not interpret is retained whole, so its
+	// payload is charged against the budget for such chunks before anything
+	// is allocated for it. A file that is simply malformed is diagnosed as
+	// malformed first, which is why this follows the overrun check rather
+	// than preceding it. The addition cannot overflow: size came from a
+	// uint32, and the total is rejected as soon as it passes the limit, so
+	// it never grows more than one chunk beyond it.
+	if !id.known() {
+		d.unknownBytes += size
+		if d.unknownBytes > d.limits.MaxUnknownBytes {
+			return Chunk{}, 0, &ChunkError{ID: id, Offset: offset,
+				Err: newErr(ErrLimitExceeded,
+					"retaining this chunk would bring the total payload of chunks with no assigned meaning to %d byte(s), exceeding limit %d",
+					d.unknownBytes, d.limits.MaxUnknownBytes)}
+		}
 	}
 
 	// The length is now known to fit inside the FORM, which the caller has
