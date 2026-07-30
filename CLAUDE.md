@@ -7,7 +7,7 @@ Guidance for coding agents working in this repository.
 - Module: `github.com/maloquacious/quetzal`; Go 1.26.4; standard library only.
 - `specification.md` is accepted for v1.0. All milestones and acceptance criteria are complete.
 - Statement coverage is 100%; preserve it. Dead branches often indicate an impossible check rather than a missing test.
-- `Version()` deliberately reports library version `0.1.0` and Quetzal version `1.4`. Do not bump it incidentally.
+- `Version()` deliberately reports library version `0.2.0` and Quetzal version `1.4`. Do not bump it incidentally.
 
 ## Commands
 

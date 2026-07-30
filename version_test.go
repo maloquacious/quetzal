@@ -12,7 +12,7 @@ import (
 // deliberate change, so this test is expected to be updated along with it.
 func TestVersion(t *testing.T) {
 	const (
-		wantPkg  = "0.1.0"
+		wantPkg  = "0.2.0"
 		wantSpec = "1.4"
 	)
 
