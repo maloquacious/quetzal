@@ -38,7 +38,7 @@
 //
 // # Naming
 //
-// Three prefixes recur, and each means something:
+// Four prefixes recur, and each means something:
 //
 //	Parse    turns a payload into one value of fixed layout: ParseHeader,
 //	         ParseStory, ParseInterpreterData.
@@ -47,6 +47,8 @@
 //	Validate reports whether a value could be written, without writing it.
 //	         Header, Frame, Memory, and Save each have one; ValidateFrames
 //	         checks a whole call stack against its story.
+//	Compare  reports how two values of one kind differ, judging neither:
+//	         Compare over saves, CompareFiles over containers.
 //
 // Limits bounds the calls where, and only where, the input decides how much
 // there is to allocate: Decode, which reads a chunk count out of the FORM, and
@@ -63,11 +65,41 @@
 //
 // # Options
 //
-// ReadOption and WriteOption configure a call. Both are functions over an
-// unexported type, so this package defines every option there is and a caller
-// cannot write its own. That is deliberate: an option here names one rule
-// being relaxed or one choice being made, and the set of rules is the format's
-// rather than open-ended.
+// ReadOption, WriteOption, and CompareOption configure a call. All three are
+// functions over an unexported type, so this package defines every option there
+// is and a caller cannot write its own.
+//
+// For ReadOption and WriteOption that closure is the point: an option there
+// names one rule being relaxed or one choice being made, and the set of rules is
+// the format's rather than open-ended. IgnoreChunkOrder exists because Quetzal
+// states an ordering rule that not every interpreter enforces. There is no
+// option to accept a save for the wrong story, because no such leniency is
+// defensible.
+//
+// CompareOption is closed for a weaker reason, and the difference is worth
+// stating. What a caller is willing to disregard when it compares two saves is
+// its own testing policy, not a rule of the format, so the reasoning above does
+// not reach it: IgnoreMemoryRange takes arbitrary bounds precisely because
+// nothing in Quetzal says which bytes of dynamic memory a caller ought to care
+// about. These options are a closed set only because a caller that needs
+// another one is better served by asking for it than by writing it — an option
+// that ships here is documented, tested, and named for what it disregards, and
+// the next caller finds it. See Compare.
+//
+// # Comparison
+//
+// Compare reports how two saves differ, and CompareFiles does the same for two
+// containers. Neither is part of the Quetzal format: they exist to make a
+// difference between this package and another interpreter, or between two runs
+// of one interpreter, something a test can print rather than something a person
+// has to find in a byte dump.
+//
+// They are therefore outside the scope of specification.md, which describes the
+// format and this package's reading and writing of it. That exclusion is stated
+// in its §5.7, along with the requirements a facility of this kind must still
+// meet. The design is recorded in
+// https://github.com/maloquacious/quetzal/issues/1, and these doc comments are
+// authoritative for the behavior.
 //
 // # Story data
 //

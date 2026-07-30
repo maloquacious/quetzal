@@ -258,6 +258,52 @@ and `ErrLimitExceeded`, so test them with `errors.Is`. Container problems are
 reported as a `*ChunkError` naming the chunk and its offset, and stack problems
 as a `*FrameError` naming the frame.
 
+### Compare two saves
+
+`Compare` reports how two saves differ, which is what a test wants when the
+question is whether this package and some other interpreter agree about a
+position. It needs no story of its own, returns no error, and reports nothing at
+all when the two agree.
+
+```go
+ours := readSave("ours.qzl", story)
+theirs := readSave("dfrotz.qzl", story)
+
+for _, d := range quetzal.Compare(ours, theirs) {
+	fmt.Println(d)
+}
+```
+
+Most of what that prints between two different interpreters is uninteresting,
+and one part of it is actively misleading. The whole Z-machine header lives
+inside dynamic memory, so a save carries the screen size, font size, interpreter
+number, default colours, and claimed standard revision of whoever wrote it —
+fields the interpreter fills in for itself and that say nothing about the saved
+game. Options disregard those, and the chunks each interpreter writes for itself:
+
+```go
+diffs := quetzal.Compare(ours, theirs,
+	quetzal.IgnoreInterpreterHeader(),
+	quetzal.IgnoreMemoryEncoding(),
+	quetzal.IgnoreChunks(quetzal.IDANNO, quetzal.IDIntD),
+)
+if len(diffs) != 0 {
+	log.Fatalf("the two interpreters disagree: %v", diffs)
+}
+```
+
+`IgnoreMemoryRange(start, end)` handles anything game-specific left over. Every
+option is named for what it disregards, and none of them can turn agreement into
+a difference, so a comparison with no options is exact.
+
+`CompareFiles` asks the other question — whether two files *say* it the same way —
+and compares containers chunk by chunk, in order, without interpreting anything.
+
+Comparison is a testing and debugging facility rather than part of the format,
+so `specification.md` deliberately says nothing about it. Its doc comments and
+[issue 1](https://github.com/maloquacious/quetzal/issues/1) are where it is
+specified; see `specification.md` §5.7 for why.
+
 ## Design
 
 - **Standard library only.** No third-party runtime dependencies.

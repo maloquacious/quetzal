@@ -335,6 +335,52 @@ Two consequences follow on the reading side:
 
 *Entry:* D40.
 
+### 5.7 Facilities for testing and debugging
+
+The package MAY export facilities that serve the people testing it, and the
+people testing its callers, rather than the format. Comparing two saves and
+reporting how they differ is the first of them.
+
+Such a facility is **outside the scope of this document**, and this is a
+deliberate limit rather than an omission. Quetzal 1.4 defines a file format; it
+says nothing about comparing two files, and a section here stating rules for
+comparison would be this document legislating about something the standard it
+implements does not describe. Every rule in the sections that follow can be
+traced to the standard or to a security or interoperability justification. A
+comparison facility has no such ancestry, and inventing one for it would make it
+harder, not easier, to tell which of this document's requirements a caller can
+rely on other implementations to honor.
+
+Such a facility is therefore specified by:
+
+-   its **doc comments**, which are authoritative for it in the same way and for
+    the same reasons §5.5 makes them authoritative for the exported API
+    generally; and
+-   a **GitHub issue**, which records the motivation, the design decisions taken,
+    and the alternatives rejected — the material this document would carry for a
+    format feature.
+
+Four requirements bind these facilities, and they are what keep the exclusion
+from becoming a loophole:
+
+1.  Such a facility MUST NOT change the semantics this document states. It
+    observes values; it does not decide what a valid file is. A change to reading
+    or writing made in order to serve one is an amendment like any other (§31).
+2.  Such a facility MUST NOT introduce a divergence from Quetzal 1.4, and so
+    requires no entry in `spec-deltas.md` and no row in §2.1. A facility that
+    appears to need one is doing something other than observing.
+3.  Such a facility MUST hold to the obligations that are the package's rather
+    than the format's: the ownership and mutation rules of §17, the prohibition
+    on panicking (§25), and the testing standards of §28. The resource limits of
+    §16 do not apply, because §16.2 bounds reading and these facilities read
+    nothing.
+4.  Its issue MUST remain reachable. An issue is closed when the work is done,
+    not deleted, and the doc comments name it.
+
+The reader wanting to know what this package's comparison facility does should
+run `go doc -all .` and read the issue it names. This document will not answer
+the question, and does not intend to.
+
 ## 6. Story Information
 
 Compressed Quetzal memory cannot be reconstructed without the original
@@ -1457,6 +1503,7 @@ The two documents therefore divide as follows, and this division is normative:
 |---|---|
 | `specification.md` | What this package does and why, in RFC 2119 terms. Amended directly when behavior changes. |
 | `spec-deltas.md` | Where this package departs from Quetzal 1.4 (sections 1 through 3), the limitations of §30, the fixture inventory, and the interoperability evidence log. |
+| GitHub issues | The design of the facilities §5.7 places outside this document — comparison, and any later feature that serves testing or debugging rather than the format. |
 
 Amending this document requires:
 
@@ -1470,6 +1517,11 @@ Amending this document requires:
     security justification §26 requires, recorded with it.
 4.  For a change to the exported API alone: nothing here, per §5.5 — but the
     package documentation is where it must be described, and §22 applies.
+5.  For a facility §5.7 covers: nothing here, and nothing in `spec-deltas.md`.
+    Its doc comments and its issue are where it is specified, and §5.7's four
+    requirements are what it must meet. Adding one does not move the
+    **Describes** line below, since the behavior this document states is
+    unchanged by a facility it does not describe.
 
 Delta identifiers are never reused and never renumbered, so a reference from a
 commit message or a test name always lands somewhere. An entry that is resolved
