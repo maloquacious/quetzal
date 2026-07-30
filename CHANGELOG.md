@@ -15,6 +15,8 @@ usually wants to know:
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-07-30
+
 ### Added
 
 - A **Stored files** section in the package documentation and in the README,
@@ -29,10 +31,10 @@ usually wants to know:
   rewrite reproduces them, and that a save can be read without its story.
   ([#9](https://github.com/maloquacious/quetzal/issues/9))
 
-Documentation only; no API or behavior changed. `Version()` reads `0.2.4`
-because `doc.go` changed and it ships in the module zip like any other file. No
-tag has been cut for it: a consumer fetching the default branch gets a
-pseudo-version, and a tag can follow whenever one is wanted.
+Documentation only; no API or behavior changed. The version moves because
+`doc.go` changed and it ships in the module zip like any other file. This one is
+tagged but has no GitHub release page: the tag is what `go get` needs, and these
+notes are here.
 
 ## [0.2.3] — 2026-07-30
 
@@ -137,7 +139,8 @@ three restore files this package writes. `ckifzs`, the conformance checker
 distributed with the standard, reports every file this package writes as
 conforming.
 
-[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/maloquacious/quetzal/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/maloquacious/quetzal/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/maloquacious/quetzal/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/maloquacious/quetzal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/maloquacious/quetzal/compare/v0.2.0...v0.2.1
