@@ -17,6 +17,34 @@ not consecutive. An identifier is never reused or renumbered; an entry that is
 resolved stays where it is, marked, so that an old reference still lands
 somewhere.
 
+## What accepting the specification changed
+
+`specification.md` was Draft while this file was being written, which is why
+section 4 below exists at all: it records cases where the specification was
+early and the implementation was right. The specification is now **Accepted for
+v1.0**, and that inverts the relationship. An implementation choice that differs
+from the specification is no longer a delta to be recorded here — it is a defect
+in one of the two documents, and one of them has to change. `specification.md`
+§31 states the rule; section 4 of this file is closed.
+
+Every entry therefore carries a **`*Fate:*`** line saying what was done with it,
+which is the one part of an entry that is not prose:
+
+- **absorbed into §*x*** — the specification now states this normatively, in the
+  section named. The entry survives as the reasoning and the evidence behind a
+  rule that lives elsewhere; the rule itself is no longer here.
+- **divergence** — a departure from Quetzal 1.4 rather than from the
+  specification, so it is enumerated in `specification.md` §2.1 and stays here in
+  full. These are the permanent contents of this file.
+- **limitation** — an accepted gap, recorded in §30. Not open work.
+- **resolved** — a gap that later work closed, kept so that an old reference to
+  the identifier still lands somewhere.
+
+`TestSpecDeltas` enforces what it can of this: every entry has a fate, every
+section it names exists, every divergence has its row in §2.1, and every
+identifier cited from Go source still exists here. What it cannot check is
+whether a fate is *true*, so the annotation is a claim like any other.
+
 **Interop risk** estimates the chance that the entry causes a disagreement with
 a real interpreter:
 
@@ -68,6 +96,10 @@ exist.
 *Where:* `stack.go`, `DecodeStks`. *Interop risk:* **none**, down from medium.
 Nothing can be rejected for these bits any more.
 
+*Fate:* **divergence** — recorded in §2.1, among the leniencies it became;
+§10.1 and §20 amended to say that the local-count check it removed cannot exist
+on reading.
+
 ### D2 — Arguments mask: the eighth bit is masked away on reading
 
 The arguments byte is `0gfedcba` and the eighth bit is undefined, since a
@@ -80,6 +112,8 @@ check can only fire on a hand-built frame.
 
 *Where:* `stack.go`. *Interop risk:* **none**, down from medium.
 
+*Fate:* **divergence** — recorded in §2.1.
+
 ### D3 — A file holding both `CMem` and `UMem` is rejected
 
 `File.Memory` errors rather than picking one. The standard says dynamic memory
@@ -89,6 +123,9 @@ repeats of the *same* chunk ID, which is a different situation. This is §14's
 "contradictory memory representations".
 
 *Where:* `memory.go`, `File.Memory`. *Interop risk:* **low**.
+
+*Fate:* **divergence** — recorded in §2.1; §14 already required it as a
+contradictory memory representation.
 
 ### D4 — Rebuilding memory requires an `IFhd`, and the story must match
 
@@ -103,6 +140,9 @@ plausible nonsense — silent corruption is the worst available outcome.
 *Where:* `memory.go`, `File.Memory`. *Interop risk:* **low**, but see D27:
 pre-checksum stories can fail this check for a reason that is our fault.
 
+*Fate:* **divergence** — recorded in §2.1; §8 requires the check, and this
+entry records the layer it is applied at.
+
 ### D5 — `CMem` that expands past the end of dynamic memory is an error
 
 Standard 3.5 lists this as an error case and leaves the handling "in whatever
@@ -111,6 +151,9 @@ byte with no run-length byte after it.
 
 *Where:* `memory.go`, `DecodeCMem`. *Interop risk:* **low**. A writer that
 compresses page-at-a-time (3.3) emits adjacent runs, not an overrun.
+
+*Fate:* **divergence** — recorded in §2.1; §9.2 already required both
+rejections.
 
 ### D6 — `UMem` length must equal the story's dynamic memory exactly
 
@@ -124,6 +167,9 @@ qualification in section 7 stands — jzip's `UMem` path is new code — but the
 gap this entry described, of never having read a `UMem` chunk from elsewhere,
 is closed.
 
+*Fate:* **divergence** — recorded in §2.1; §9.1 already required it in both
+directions.
+
 ### D7 — Chunk identifiers must be four printable ASCII characters
 
 Enforced because a non-printable ID is the earliest signal that the chunk
@@ -132,6 +178,8 @@ stream has desynced.
 *Where:* `chunk.go`, `ID.valid`. *Interop risk:* **low**. See D10 for the part
 of the ID rule that is deliberately *not* enforced.
 
+*Fate:* **divergence** — recorded in §2.1.
+
 ### D8 — `ParseStory` rejects Z-machine versions outside 1–8
 
 Also rejects a static-memory base inside the 64-byte header, or past the end of
@@ -139,6 +187,8 @@ the image. Quetzal 1.4 covers versions 1–8.
 
 *Where:* `story.go`, `ParseStory`. *Interop risk:* **none** (concerns story
 images, not saves).
+
+*Fate:* **divergence** — recorded in §2.1; the version range is §23's.
 
 ### D9 — Versions other than 6 must begin with the dummy frame
 
@@ -156,6 +206,9 @@ standard's own rule, and **both halves are now exercised by real files**: six V3
 saves that carry the frame, and one V6 save from Gargoyle that correctly does
 not (section 7). Note that the converse is still not checked: a V6 save carrying
 a dummy frame anyway is accepted.
+
+*Fate:* **divergence** — recorded in §2.1; §14 amended to require the frame on
+validation.
 
 ### D32 — `Read` rejects a file whose `IFhd` does not come before `CMem`/`UMem`/`Stks`
 
@@ -194,6 +247,9 @@ but the default needs no apology.
 *Where:* `read.go`, `File.checkOrder`, `IgnoreChunkOrder`. *Interop risk:*
 **low**.
 
+*Fate:* **divergence** — recorded in §2.1; §7.1 amended to say which layer
+enforces the ordering rule and why.
+
 ### D33 — `Read` validates the save it reconstructs, and so requires the dummy frame
 
 `Read` finishes by calling `Save.Validate`, which makes a `*Save` returned by
@@ -215,6 +271,9 @@ what it establishes is that such a save is not a file real interpreters accept,
 which is what the medium rating was hedging against. Two writers also emit the
 frame, so nothing has ever produced one to reject.
 
+*Fate:* **divergence** — recorded in §2.1; §14 amended to state that reading
+validates what it reconstructs.
+
 ---
 
 ## 2. More lenient than a literal reading
@@ -232,6 +291,8 @@ exactly.
 *Where:* `chunk.go`, `ID.valid` (documented in the comment). *Interop risk:*
 **none**.
 
+*Fate:* **divergence** — recorded in §2.1.
+
 ### D11 — A pad byte must be present but may hold any value
 
 The standard says the pad byte is zero. Its presence is required, because chunk
@@ -239,6 +300,8 @@ lengths keep the stream aligned; its value is ignored and discarded, because a
 non-zero pad carries no information.
 
 *Where:* `read.go`, `decoder.chunk`. *Interop risk:* **none**.
+
+*Fate:* **divergence** — recorded in §2.1.
 
 ### D12 — An `IFhd` longer than 13 bytes is accepted
 
@@ -249,12 +312,17 @@ See D19 for what this means on write.
 
 *Where:* `header.go`, `ParseHeader`. *Interop risk:* **none** on read.
 
+*Fate:* **divergence** — recorded in §2.1; §5.5 records the field that
+preserves the extra bytes.
+
 ### D13 — Bytes after the FORM are ignored
 
 A simple IFF file is a single FORM chunk, so `Decode` stops at its end and
 neither consumes nor examines what follows.
 
 *Where:* `read.go`, `Decode`. *Interop risk:* **none**.
+
+*Fate:* **divergence** — recorded in §2.1.
 
 ### D14 — An empty `FORM IFZS` decodes successfully
 
@@ -265,6 +333,9 @@ See D25 for the item this leaves unchecked.
 
 *Where:* `read.go`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §7.1, which now attributes each of its seven checks
+to a layer; also recorded in §2.1.
+
 ### D15 — An empty `Stks` chunk decodes to zero frames without error
 
 Whether zero frames is legal depends on the story's version — versions other
@@ -272,6 +343,9 @@ than 6 require the dummy frame — so the check belongs to `ValidateFrames`,
 which has the story.
 
 *Where:* `stack.go`, `DecodeStks`. *Interop risk:* **none**.
+
+*Fate:* **absorbed** into §7.1, for the same reason as D14; also recorded in
+§2.1.
 
 ### D35 — Standard 7.14 is not enforced: an `IntD` may name neither a system nor an interpreter
 
@@ -285,6 +359,8 @@ do not read, which trades a real capability for the enforcement of a rule that
 distinguishes no file anyone writes.
 
 *Where:* `chunk.go`, `ParseInterpreterData`. *Interop risk:* **none**.
+
+*Fate:* **divergence** — recorded in §2.1.
 
 ---
 
@@ -320,6 +396,9 @@ byte. What `DecodeStks` preserves is a value real writers do not produce.
 *Where:* `stack.go`. *Interop risk:* **none** — a writer that reads the byte
 we zero would be reading a byte the standard already calls meaningless.
 
+*Fate:* **divergence** — recorded in §2.1; §10.2 already asked writers to store
+zero.
+
 ### D17 — `EncodeCMem` drops the trailing zero-difference region
 
 Standard 3.4 permits this and does not require implementing it on writes. We do
@@ -331,6 +410,8 @@ confirming. It is now confirmed twice over in each direction: Frotz and Bocfel
 both *write* streams that stop short of the end (section 7), and both *restored*
 files this package wrote, which use the same shortcut.
 
+*Fate:* **divergence** — recorded in §2.1; §9.3 already permitted it.
+
 ### D18 — Zero runs longer than 256 bytes are split into consecutive runs
 
 One length byte holds `n` for a run of `n+1`, so 256 is the maximum. Longer
@@ -341,6 +422,8 @@ medium. Real dynamic memory has long unchanged stretches, so almost every file
 we write exercises this, and both interpreters do the same: a four-move Frotz
 save contains 34 maximum-length runs and Bocfel's 30 (section 7). Files we wrote
 this way restore in both.
+
+*Fate:* **divergence** — recorded in §2.1; §9.3 already required it.
 
 ### D19 — `Header.Encode` writes `Header.Extra` back out
 
@@ -356,12 +439,17 @@ medium on evidence. A save was written through `Write` with
 interpreters choke on. If it ever does bite, the fix is a write option that
 drops `Extra` rather than a change to the reader.
 
+*Fate:* **divergence** — recorded in §2.1.
+
 ### D20 — Compression is not optimal
 
 `EncodeCMem` makes a single pass and does not search for a shorter encoding.
 Standard 3.3 and §9.3 both say this is fine.
 
 *Where:* `memory.go`. *Interop risk:* **none**.
+
+*Fate:* **divergence** — recorded in §2.1; §9.3 already said compression need
+not be optimal.
 
 ### D34 — `Read` does not carry forward `IntD` chunks the standard forbids copying
 
@@ -392,6 +480,9 @@ carry it forward deliberately.
 **none** inbound. The cost is a MacOS alias or similar being discarded when it
 would in fact have been usable — see 7.22.
 
+*Fate:* **divergence** — recorded in §2.1; §13 amended to name the three kinds
+of chunk that are dropped and why the drop belongs to reading.
+
 ### D36 — Additional chunks are always written after the three required ones
 
 `Save.Encode` writes `IFhd`, then memory, then `Stks`, then everything in
@@ -404,6 +495,9 @@ position relative to the required three is not. Standard 5.4 fixes only that
 
 *Where:* `write.go`, `Save.Encode`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §11, which now fixes where additional chunks are
+written and what about their order is preserved.
+
 ### D37 — An unset memory encoding is an error, not a default
 
 `Memory{Data: mem}` with no `Encoding` fails to write. Quetzal recommends
@@ -414,6 +508,9 @@ more likely to be a half-built value than a request for the default, and
 
 *Where:* `memory.go`, `Memory.Validate`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §9.4, which now requires an unset encoding to be an
+error and explains the enumeration starting at one.
+
 ### D38 — `File.WriteTo` refuses a FORM larger than 4 GiB
 
 The FORM length is a four-byte field, so a longer container cannot describe
@@ -422,13 +519,28 @@ memory tops out at 64 KB, so reaching this needs deliberate effort.
 
 *Where:* `write.go`, `File.WriteTo`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §11, which now names the container's own length as a
+field that cannot be represented.
+
 ---
 
-## 4. Data model deviations from `specification.md`
+## 4. Data model deviations from `specification.md` — closed
 
-§5's API is explicitly representative — "the exact API MAY evolve during
-implementation, but the semantics in this specification MUST be retained".
-These are the evolutions.
+**This section is closed and takes no new entries.** It existed because §5's API
+was explicitly representative and the specification was Draft, so an
+implementation that improved on a sketch had somewhere to say so. Every entry
+below has been absorbed into the specification, and §5.5 now settles the general
+question the section was working around: the specification governs semantics and
+`go doc` governs the exported surface, so a difference between a Go declaration
+here and one in the specification is not a delta at all.
+
+A new deviation from `specification.md` is therefore a defect rather than an
+entry. Either the code is wrong, or the specification is, and §31 says how to
+amend it.
+
+The entries are kept because each carries the reasoning behind a rule that now
+lives in the specification, and because a resolved entry that vanishes takes its
+references with it.
 
 ### D21 — `Memory.Data` always holds decoded dynamic memory
 
@@ -439,6 +551,8 @@ round trip over dynamic memory rather than over the payload that encoded it.
 
 *Where:* `memory.go`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §9.2.1.
+
 ### D22 — `MemoryEncoding` also serves as the writer's mode
 
 §9.4 sketches a separate `MemoryMode` enum (`CompressMemory`/`StoreMemory`) for
@@ -448,6 +562,9 @@ The Milestone 5 write option will take a `MemoryEncoding`.
 
 *Where:* `memory.go`. *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §9.4, which now shows one enumeration serving both
+roles and supersedes its own `MemoryMode` sketch.
+
 ### D23 — `Story` carries a `Version` field
 
 §6's representative type has release, serial, checksum, and dynamic memory.
@@ -455,6 +572,8 @@ Version was added because the dummy-frame rule (standard 4.11) is
 version-dependent and `ValidateFrames` needs it.
 
 *Where:* `story.go`. *Interop risk:* **none**.
+
+*Fate:* **absorbed** into §6.
 
 ### D24 — Additions with no counterpart in §5
 
@@ -475,6 +594,9 @@ version-dependent and `ValidateFrames` needs it.
 
 *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §5.5, which tabulates every addition to §5's
+illustration and why each exists.
+
 ### D39 — `Read`, `Write`, and `Validate` take `Story` by value, not `*Story`
 
 §7, §11, and §14 all write `*Story`. This package takes it by value, as
@@ -492,6 +614,9 @@ costs nothing worth measuring, and it removes the question of whether the
 package retains the pointer.
 
 *Interop risk:* **none**.
+
+*Fate:* **absorbed** into §7, §11, and §14, all of which now take the story by
+value and say why a nil story would be meaningless.
 
 ### D40 — `Save.Chunks` holds only the chunks the other fields do not
 
@@ -514,6 +639,8 @@ Two consequences on the reading side:
 *Where:* `read.go`, `File.Save`; `write.go`, `checkExtraChunks`.
 *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §5.6.
+
 ### D41 — `InterpreterData` omits the reserved word and cannot be encoded
 
 §13's representative type is followed except that the two reserved bytes
@@ -528,6 +655,8 @@ to read the flags to honor 7.11.
 
 *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §13.
+
 ---
 
 ## 5. Gaps
@@ -536,11 +665,20 @@ Gaps, not decisions. Listed because an interoperability failure may trace to
 one of them rather than to a delta above. Entries resolved by later work stay
 here, marked, so that a reference to their identifier still lands somewhere.
 
+At acceptance, three of these were still open, and all three are now accepted
+limitations rather than gaps: D27's untested trigger, D30's single leniency
+option, and D43's untested Z-machine versions. `specification.md` §30 states
+them, and states them as limits on what may legally be committed as a test
+fixture rather than as work that further effort on this package would finish.
+The rest of this section is resolved history.
+
 ### D25 — §7.1 item 6 is unenforced: nothing checks that `IFhd` precedes `CMem`/`UMem`/`Stks`
 
 **Resolved in Milestone 5.** `Read` enforces the ordering and `Save.Encode`
 produces it; `Decode` still does not check. See D32 for the reasoning and for
 where the check lives.
+
+*Fate:* **resolved** — see D32, which carries the rule and the reasoning.
 
 ### D26 — `Limits.MaxUnknownBytes` is declared but never enforced
 
@@ -573,6 +711,9 @@ magnitude under the 4 MiB default, so nothing real is near it.
 
 *Interop risk:* **none**. Security-relevant, and a §16 item; it closes the hole
 in acceptance criterion 11.
+
+*Fate:* **absorbed** into §16.1, which states all three of the decisions below
+normatively.
 
 ### D27 — Pre-checksum stories get a computed checksum
 
@@ -614,6 +755,9 @@ version 2 image carries the end-to-end round trip in
 pre-checksum story has ever been through it: the arithmetic is confirmed
 against three files, the *decision to apply it* is not. See D43.
 
+*Fate:* **absorbed** into §6.1, which is now where the algorithm and its three
+rules live; the untested trigger is a **limitation** under §30.
+
 ### D28 — No diagnostic mechanism for ignored duplicate chunks
 
 **Resolved by documentation in Milestone 7**, on the argument that the
@@ -643,6 +787,9 @@ knowing which identifiers Quetzal allows one of; the package does not encode
 that judgment anywhere a caller can query.
 
 *Interop risk:* **none**.
+
+*Fate:* **absorbed** into §7.2, which now says that retention *is* the
+diagnostic mechanism and that no separate facility should be added.
 
 ### D29 — No text-chunk helpers
 
@@ -683,6 +830,9 @@ interprets them, which is what §12's closing MUST NOT requires.
 2.5"`, in `TestInteropBocfelSpecifics` — read through the helper rather than by
 hand, so that it is tested against a chunk this package did not write.
 
+*Fate:* **absorbed** into §12, which now carries all four decisions as
+requirements.
+
 ### D30 — Lenient mode: one option exists, and most rules need none
 
 **Partly resolved.** §3.5 permits leniency only as an explicit opt-in, and there
@@ -703,11 +853,17 @@ it should follow `IgnoreChunkOrder`'s shape rather than becoming a general
 
 *Interop risk:* n/a — this is the escape hatch for everything else.
 
+*Fate:* **limitation** — §30 records that one option exists and the others are
+hypothetical, and §2.1 marks the rule it relaxes. §3.5 needed no change.
+
 ### D31 — No `Save`, `Read`, or `Write`
 
 **Resolved in Milestone 5.** All three exist, along with `Save.Validate`,
 `Save.Encode`, `File.Save`, `File.WriteTo`, and `WithEncoding`. The choices
 made along the way are D32–D41.
+
+*Fate:* **resolved** — the choices made along the way are D32 through D41, all
+now absorbed.
 
 ### D43 — Only version 3 stories are exercised, and that is an accepted limit for v1.0
 
@@ -776,6 +932,9 @@ that may legally be redistributed as a test fixture.*
 *Interop risk:* **low** for V1 and V2, now that D27 is implemented; **unknown**
 for V6, which is worse than a number, because nothing has looked.
 
+*Fate:* **limitation** — §30, and §23 narrowed so that the version claim
+matches the evidence rather than the code.
+
 ### D42 — `Limits` are not applied when writing
 
 `Limits` bounds a decode, because a decode allocates from lengths the file
@@ -788,6 +947,8 @@ a caller ever wants "write nothing larger than *n*" — which would be a new
 option, not a reuse of `Limits`.
 
 *Interop risk:* **none**.
+
+*Fate:* **absorbed** into §16.2.
 
 ### D44 — What the API review kept, and why
 
@@ -830,12 +991,22 @@ README now compiles against the package.
 
 *Interop risk:* **none**.
 
+*Fate:* **absorbed** into §5.5, which makes `go doc` authoritative for the
+exported surface, and into §22, which carries the obligations that shift onto
+the doc comments as a result.
+
 ---
 
-## 6. Fixture checklist for Milestone 6
+## 6. Fixture checklist
 
 §19's fixture list, annotated with the deltas each one exercises. Section 7
 records what has actually been checked against another implementation so far.
+
+**This table is normative in place of §19's list**, which it supersedes and which
+now points here. It is a superset: the last seven rows are additions, one per
+question that only a real file can settle. Keeping the annotation is the point —
+a fixture list that does not say which entries each file exercises cannot show
+which files are still missing, which is the only thing such a list is for.
 
 | Fixture | Deltas | Status |
 |---|---|---|

@@ -15,6 +15,10 @@ Standard (Quetzal), version 1.4](https://ifarchive.org/if-archive/infocom/interp
 ## Status
 
 Feature complete for v1.0, and the API is not expected to change further.
+[specification.md](specification.md) is accepted rather than draft: every
+deliberate departure from Quetzal 1.4 is enumerated in its §2.1, every accepted
+limitation in its §30, and [spec-deltas.md](spec-deltas.md) carries the reasoning
+and the interoperability evidence behind each one.
 
 Implemented:
 
@@ -281,6 +285,14 @@ included:
 ```sh
 go test -run XXX -fuzz FuzzDecode -fuzztime 30s ./...
 ```
+
+Every Go snippet above is compiled. They live in `example_test.go` as example
+functions, which the compiler checks and the test runner does not execute, and a
+test asserts that the README and that file still agree — so a snippet cannot
+quietly rot into something that no longer builds. The same suite checks that the
+two design documents stay in step: that every entry in `spec-deltas.md` records
+what was done with it, and that every departure from the standard reaches
+`specification.md` §2.1.
 
 ## License
 
