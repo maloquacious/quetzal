@@ -7,7 +7,8 @@ Guidance for coding agents working in this repository.
 - Module: `github.com/maloquacious/quetzal`; Go 1.26.4; standard library only.
 - `specification.md` is accepted for v1.0. All milestones and acceptance criteria are complete.
 - Statement coverage is 100%; preserve it. Dead branches often indicate an impossible check rather than a missing test.
-- `Version()` deliberately reports library version `0.2.1` and Quetzal version `1.4`. Do not bump it incidentally.
+- `Version()` deliberately reports library version `0.2.2` and Quetzal version `1.4`. Do not bump it incidentally.
+- Adding or removing a `.go` file bumps the patch level at least, test files included: they ship in the module zip, so a consumer receives them.
 
 ## Commands
 
@@ -24,6 +25,12 @@ go doc -all .
 Other fuzz targets are `FuzzCMem`, `FuzzStacks`, and `FuzzWriteRoundTrip`. Run one target per invocation. Keep any test that invokes an external interpreter behind a build tag or in a separate script.
 
 README Go snippets are compiled examples in `example_test.go`; update both together.
+
+`tutorial.md` is held to a stricter standard than the README, because a reader
+still learning cannot tell a stale lesson from their own mistake.
+`tutorial_test.go` runs the tutorial's program against committed fixtures and
+asserts every number it prints, and checks that the markdown's code is the code
+that ran. Changing behavior the tutorial shows means updating all three.
 
 ## Sources of truth
 

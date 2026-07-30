@@ -1,5 +1,7 @@
 # quetzal
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/maloquacious/quetzal.svg)](https://pkg.go.dev/github.com/maloquacious/quetzal)
+
 A Go package for reading, validating, and writing Quetzal saved-game files for
 the Z-machine.
 
@@ -61,6 +63,25 @@ go get github.com/maloquacious/quetzal
 ```
 
 Requires Go 1.26 or later. The package has no third-party dependencies.
+
+## Documentation
+
+New to Quetzal, or to this package? Start with
+**[the tutorial](tutorial.md)** — it takes one real Frotz save of Zork I,
+takes it apart until you can say where the player was standing and what the game
+was in the middle of doing, and writes it back out. Fifteen minutes, and it uses
+fixtures committed here, so there is nothing to go and find first.
+
+Everything else assumes you have done that or already know the format:
+
+| | |
+|---|---|
+| [Tutorial](tutorial.md) | A lesson. Read your first save, start to finish. |
+| [Usage](#usage), below | How-to guides for specific goals. |
+| [pkg.go.dev](https://pkg.go.dev/github.com/maloquacious/quetzal) | The API reference. Also `go doc github.com/maloquacious/quetzal`. |
+| [specification.md](specification.md) | What this package promises, and its accepted limitations. |
+| [spec-deltas.md](spec-deltas.md) | Every deliberate departure from Quetzal 1.4, argued out. |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, by release. |
 
 ## Usage
 
@@ -335,10 +356,18 @@ go test -run XXX -fuzz FuzzDecode -fuzztime 30s ./...
 Every Go snippet above is compiled. They live in `example_test.go` as example
 functions, which the compiler checks and the test runner does not execute, and a
 test asserts that the README and that file still agree — so a snippet cannot
-quietly rot into something that no longer builds. The same suite checks that the
-two design documents stay in step: that every entry in `spec-deltas.md` records
-what was done with it, and that every departure from the standard reaches
-`specification.md` §2.1.
+quietly rot into something that no longer builds.
+
+[The tutorial](tutorial.md) is held to more than that, because a reader who is
+still learning cannot tell a stale lesson from their own mistake.
+`tutorial_test.go` runs the program the tutorial builds against the same
+committed fixtures the reader is told to copy, and asserts every number it
+prints — the program counter, the frame count, both file sizes, and the single
+difference `Compare` reports at the end.
+
+The same suite checks that the two design documents stay in step: that every
+entry in `spec-deltas.md` records what was done with it, and that every departure
+from the standard reaches `specification.md` §2.1.
 
 ## License
 
