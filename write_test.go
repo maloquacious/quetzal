@@ -750,6 +750,97 @@ func TestReadRequiresTheDummyFrame(t *testing.T) {
 	}
 }
 
+// TestIgnoreChunkOrder covers the one compatibility option this package has.
+//
+// Rejecting a mis-ordered save follows the format, but Frotz restores such a
+// file without complaint, so the rule is stricter than the most widely used
+// interpreter. The option exists so that a caller meeting a writer that gets
+// the order wrong can accept its files rather than be the only program that
+// cannot read them.
+func TestIgnoreChunkOrder(t *testing.T) {
+	story, current := saveStory(t)
+
+	cmem, err := quetzal.EncodeCMem(current, story.DynamicMemory)
+	if err != nil {
+		t.Fatalf("EncodeCMem: unexpected error: %v", err)
+	}
+	// Memory and stacks first, identification last.
+	data := ifzs(
+		chunkBytes("CMem", cmem),
+		chunkBytes("Stks", dummyFrameBytes(nil)),
+		chunkBytes("IFhd", ifhdPayload),
+	)
+
+	if _, err := quetzal.Read(bytes.NewReader(data), story); !errors.Is(err, quetzal.ErrInvalidFormat) {
+		t.Fatalf("Read without the option: got %v, want ErrInvalidFormat", err)
+	}
+
+	save, err := quetzal.Read(bytes.NewReader(data), story, quetzal.IgnoreChunkOrder())
+	if err != nil {
+		t.Fatalf("Read with IgnoreChunkOrder: unexpected error: %v", err)
+	}
+	if save.Header.Release != 88 {
+		t.Errorf("Release: got %d, want 88", save.Header.Release)
+	}
+	if !bytes.Equal(save.Memory.Data, current) {
+		t.Error("dynamic memory was not reconstructed")
+	}
+
+	t.Run("only the ordering is relaxed", func(t *testing.T) {
+		// The identity check is what the ordering rule exists to protect,
+		// so it must still happen. A caller that accepts a mis-ordered
+		// file has not asked to accept the wrong story.
+		other, err := quetzal.ParseStory(storyImage(3, 89, "840726", 0x1234, 0x100, 0x200))
+		if err != nil {
+			t.Fatalf("ParseStory: unexpected error: %v", err)
+		}
+		if _, err := quetzal.Read(bytes.NewReader(data), other, quetzal.IgnoreChunkOrder()); !errors.Is(err, quetzal.ErrStoryMismatch) {
+			t.Errorf("Read: got %v, want ErrStoryMismatch", err)
+		}
+
+		// Nor to accept a save missing the frame its version requires.
+		broken := ifzs(
+			chunkBytes("CMem", cmem),
+			chunkBytes("Stks", frameBytes(0x00abcd, 0, 0x05, 0x01, []uint16{0x1234}, nil)),
+			chunkBytes("IFhd", ifhdPayload),
+		)
+		if _, err := quetzal.Read(bytes.NewReader(broken), story, quetzal.IgnoreChunkOrder()); !errors.Is(err, quetzal.ErrInvalidFormat) {
+			t.Errorf("Read: got %v, want ErrInvalidFormat for a missing dummy frame", err)
+		}
+	})
+
+	t.Run("the option reaches Decode and File.Save", func(t *testing.T) {
+		// Read forwards options to Decode, and the File remembers them, so
+		// the two-step path behaves the same as the one-step path.
+		f, err := quetzal.Decode(bytes.NewReader(data), quetzal.IgnoreChunkOrder())
+		if err != nil {
+			t.Fatalf("Decode: unexpected error: %v", err)
+		}
+		if _, err := f.Save(story); err != nil {
+			t.Errorf("File.Save: unexpected error: %v", err)
+		}
+
+		strict, err := quetzal.Decode(bytes.NewReader(data))
+		if err != nil {
+			t.Fatalf("Decode: unexpected error: %v", err)
+		}
+		if _, err := strict.Save(story); !errors.Is(err, quetzal.ErrInvalidFormat) {
+			t.Errorf("File.Save without the option: got %v, want ErrInvalidFormat", err)
+		}
+	})
+
+	t.Run("a rewritten save comes out in the required order", func(t *testing.T) {
+		// Accepting a mis-ordered file does not mean producing one.
+		f, err := quetzal.Decode(bytes.NewReader(writeSave(t, story, save)))
+		if err != nil {
+			t.Fatalf("Decode: unexpected error: %v", err)
+		}
+		if f.Chunks[0].ID != quetzal.IDIFhd {
+			t.Errorf("first chunk is %s, want %s", f.Chunks[0].ID, quetzal.IDIFhd)
+		}
+	})
+}
+
 func TestReadRejectsAMismatchedStory(t *testing.T) {
 	story, save := sampleSave(t)
 	data := writeSave(t, story, save)

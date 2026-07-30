@@ -96,7 +96,8 @@ func TestLocalStories(t *testing.T) {
 // that path exercised by a real interpreter, and to find out what a real
 // interpreter puts in the result byte when the standard calls it meaningless.
 func TestLocalSaves(t *testing.T) {
-	saves := localFiles(t, "*.qzl")
+	// Whichever extension the interpreter that wrote it uses.
+	saves := append(localFiles(t, "*.qzl"), localFiles(t, "*.glksave")...)
 	if len(saves) == 0 {
 		t.Skipf("no saves in %s; see %s/README.md for how to make them", localDir, localDir)
 	}

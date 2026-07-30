@@ -30,6 +30,11 @@ type File struct {
 	// operations that allocate from a payload honor the same bounds. A File
 	// built by hand leaves this zero and so gets the defaults.
 	limits Limits
+
+	// ignoreChunkOrder records whether Decode was told to overlook the
+	// rule that IFhd comes first, so that Save applies the same leniency.
+	// A File built by hand is strict, which is the safe default.
+	ignoreChunkOrder bool
 }
 
 // First returns the first chunk with the given identifier.
@@ -123,8 +128,10 @@ func (f *File) Save(story Story) (*Save, error) {
 	// Only now is it known that an IFhd exists, which is what makes a
 	// memory or stack chunk found before one an ordering error rather than
 	// a missing-chunk error.
-	if err := f.checkOrder(); err != nil {
-		return nil, err
+	if !f.ignoreChunkOrder {
+		if err := f.checkOrder(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Memory verifies the story identity before expanding anything.
@@ -189,12 +196,32 @@ type ReadOption func(*readConfig)
 // readConfig holds the settings a ReadOption may adjust.
 type readConfig struct {
 	limits Limits
+
+	// ignoreChunkOrder relaxes the rule that IFhd comes first.
+	ignoreChunkOrder bool
 }
 
 // WithLimits sets the resource limits for a decode. Zero-valued fields keep
 // their defaults, so a caller may override only the limits it cares about.
 func WithLimits(l Limits) ReadOption {
 	return func(c *readConfig) { c.limits = l.resolve() }
+}
+
+// IgnoreChunkOrder accepts a save whose IFhd chunk does not come before its
+// memory and stack chunks.
+//
+// The format requires that order, so that an interpreter learns it has the
+// wrong story before decoding anything against it, and this package enforces it
+// by default. Frotz does not: it restores a save whose IFhd comes last without
+// complaint. A file written by some interpreter that gets the order wrong would
+// therefore work elsewhere and fail here, and this option is the way to accept
+// it anyway.
+//
+// Nothing else is relaxed. The identity check still happens before memory is
+// rebuilt — it is the ordering of the chunks in the file that is overlooked,
+// not the verification they exist for.
+func IgnoreChunkOrder() ReadOption {
+	return func(c *readConfig) { c.ignoreChunkOrder = true }
 }
 
 // Decode parses the IFF container of a Quetzal save without reconstructing
@@ -219,7 +246,11 @@ func Decode(r io.Reader, opts ...ReadOption) (*File, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	d := &decoder{r: &countingReader{r: r}, limits: cfg.limits}
+	d := &decoder{
+		r:                &countingReader{r: r},
+		limits:           cfg.limits,
+		ignoreChunkOrder: cfg.ignoreChunkOrder,
+	}
 	return d.form()
 }
 
@@ -227,6 +258,9 @@ func Decode(r io.Reader, opts ...ReadOption) (*File, error) {
 type decoder struct {
 	r      *countingReader
 	limits Limits
+
+	// ignoreChunkOrder is carried into the File so that Save honors it.
+	ignoreChunkOrder bool
 }
 
 // form parses the outer FORM chunk and its contents.
@@ -254,7 +288,7 @@ func (d *decoder) form() (*File, error) {
 		return nil, prefixed(newErr(ErrInvalidFormat, "expected FORM type %s, found %s", IDIFZS, ft))
 	}
 
-	file := &File{limits: d.limits}
+	file := &File{limits: d.limits, ignoreChunkOrder: d.ignoreChunkOrder}
 	for remaining := formLen - formTypeSize; remaining > 0; {
 		c, n, err := d.chunk(remaining)
 		if err != nil {

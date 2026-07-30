@@ -28,12 +28,9 @@ const (
 	// its result.
 	flagDiscardResult = 0x10
 
-	// flagReserved covers the bits that the flags byte, 000pvvvv, leaves
-	// undefined.
-	flagReserved = 0xe0
-
 	// argumentsMask covers the seven argument-supplied bits of the
-	// arguments byte, 0gfedcba.
+	// arguments byte, 0gfedcba. The eighth bit is undefined and is masked
+	// away on reading; see DecodeStks.
 	argumentsMask = 0x7f
 )
 
@@ -55,8 +52,12 @@ type Frame struct {
 
 	// Arguments is the argument-supplied mask, 0gfedcba: bit 0 is set if
 	// the first argument was supplied, bit 1 if the second was, and so on
-	// through the seven arguments a routine can take. All seven bits are
-	// preserved; the eighth is not defined and is never set.
+	// through the seven arguments a routine can take.
+	//
+	// All seven bits are preserved. The eighth is undefined, is masked
+	// away when reading, and cannot be written: Validate rejects it, since
+	// a caller that sets it is asking for something the format cannot
+	// express rather than presenting a file that has to be dealt with.
 	Arguments uint8
 
 	// Locals holds the routine's local variables in order, so that
@@ -143,6 +144,10 @@ func (f *File) Frames() ([]Frame, error) {
 // other frame rather than being recognized or removed; see Frame.IsDummy and
 // ValidateFrames.
 //
+// Bits the frame header leaves undefined — the top three of the flags byte and
+// the top bit of the arguments byte — are ignored rather than treated as
+// errors, so a frame is never rejected for a bit that carries no meaning.
+//
 // Zero-valued fields of limits take their defaults. The payload is neither
 // retained nor modified.
 func DecodeStks(payload []byte, limits Limits) ([]Frame, error) {
@@ -165,16 +170,20 @@ func DecodeStks(payload []byte, limits Limits) ([]Frame, error) {
 		}
 
 		header := payload[off : off+frameHeaderSize]
+
+		// The flags byte is 000pvvvv and the arguments byte 0gfedcba, so
+		// each leaves bits the format does not define. Those bits are
+		// ignored rather than rejected: the standard says nothing about
+		// what they mean, a writer that set one would still be describing
+		// a frame this package understands completely, and refusing the
+		// file would lose a save over bits with no meaning.
+		//
+		// The cost is that a frame header can no longer be invalid, so a
+		// desynced stack stream is caught only by running out of payload
+		// rather than by an implausible header. That remains a bounds
+		// check: nothing is allocated before the frame is known to fit.
 		flags := header[3]
-		if flags&flagReserved != 0 {
-			return nil, &FrameError{Index: index, Err: newErr(ErrInvalidFormat,
-				"flags byte %#02x sets a bit the format leaves undefined", flags)}
-		}
-		arguments := header[5]
-		if arguments&^argumentsMask != 0 {
-			return nil, &FrameError{Index: index, Err: newErr(ErrInvalidFormat,
-				"arguments mask %#02x sets a bit outside the seven the format defines", arguments)}
-		}
+		arguments := header[5] & argumentsMask
 
 		// A local count is four bits and an evaluation count one word, so
 		// the largest frame is well under any integer limit.

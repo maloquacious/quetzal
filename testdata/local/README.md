@@ -18,6 +18,7 @@ Nothing here is required. `go test ./...` passes with this directory empty;
 |---|---|---|
 | Border Zone (`spy.z5`) | 5 | **D16** — the `CALL_xN` discard bit, which cannot occur in a V3 save |
 | Journey (`journey.z6`) | 6 | **D9** — a save with no dummy frame, which V6 does not write |
+| `journey-r83-forest.glksave` | 6 | the save itself, made in Gargoyle; five frames, none of them a dummy |
 | Beyond Zork (`bzbeta.z5`) | 5 | a second V5 opinion; 34800 bytes of dynamic memory, the largest to hand |
 
 No version 1 or 2 story has been found in any form that could be fetched, so
@@ -64,3 +65,8 @@ printf '1\nsave\nborderzone-r9-train.qzl\nquit\ny\n' |
 Journey is version 6 and menu-driven. `dfrotz` cannot run it — the dumb
 interface has no graphics, and the game beeps rather than producing a prompt.
 Use Gargoyle, which handles V6, and save by hand.
+
+A save from an unlicensed story belongs here rather than in `../gargoyle/`, for
+a practical reason as much as a legal one: `interop_test.go` finds a fixture's
+story from its name and fails when there is none to find, so a save whose story
+cannot be committed has nothing to be read against in a fresh clone.

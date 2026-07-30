@@ -37,39 +37,39 @@ considers valid into an error. If interoperability testing trips one of these
 on a file a real interpreter wrote, the delta is the thing to change — not the
 file.
 
-### D1 — Stack frame flags: reserved bits must be zero
+### D1 — Stack frame flags: reserved bits are ignored
 
-`DecodeStks` rejects a frame whose flags byte sets any bit outside `000pvvvv`
-(mask `0xE0`).
+`DecodeStks` reads the local count and the `p` bit out of the flags byte,
+`000pvvvv`, and ignores the top three bits entirely.
 
-The standard defines the layout (4.3.2) but does not say what to do with the
-undefined bits. Frames are parsed one after another with nothing to
-resynchronize on, and the two fields that *are* defined — a four-bit local
-count and a one-word evaluation count — are legal at every value they can hold.
-The reserved bits are therefore the only structural check available on a frame
-header, which is why they are enforced rather than masked off.
+**This was a rejection path until 2026-07-29 and is now a masking one.** The
+standard defines the layout (4.3.2) but says nothing about the undefined bits,
+so a writer that set one would still be describing a frame this package
+understands completely, and refusing the file would lose a save over bits with
+no meaning.
 
-*Where:* `stack.go`, `DecodeStks`. *Interop risk:* **medium**. A writer that
-builds the byte from a local count and a discard flag cannot set them, which is
-presumably every writer — but this is the delta most likely to reject a file
-from an interpreter nobody has tested. Masking instead of rejecting is a
-one-line change if a real writer turns out to set them. One Frotz 2.55 save
-sets none of them (section 7), which is a start and no more.
+The cost is real and worth stating. Frames are parsed one after another with
+nothing to resynchronize on, and the two defined fields are legal at every value
+they can hold, so the reserved bits were the only implausibility check available
+on a frame header. Without it a desynced stack stream is caught only by running
+out of payload rather than by an obviously wrong header. That remains a *bounds*
+check — nothing is allocated before a frame is known to fit, and `MaxFrames` and
+`MaxStackWords` still apply — so what degrades is diagnosis, not safety.
 
-### D2 — Arguments mask: the eighth bit must be zero
+*Where:* `stack.go`, `DecodeStks`. *Interop risk:* **none**, down from medium.
+Nothing can be rejected for these bits any more.
 
-`DecodeStks` rejects an arguments byte with bit 7 set; `Frame.Validate` rejects
-it on write. A routine takes at most seven arguments, so `0gfedcba` leaves the
-top bit undefined (4.3.4, §5.3).
+### D2 — Arguments mask: the eighth bit is masked away on reading
 
-*Where:* `stack.go`. *Interop risk:* **medium**, for the same reason as D1.
-Across six committed fixtures from two interpreters the only masks appearing are
-`0x00` and `0x01`, and every one of those saves has exactly five frames, because
-`SAVE` is reached from the same depth of the game's main loop wherever the
-player is. **Playing further does not produce a more interesting stack.** A
-different *game* does: one fetched version 5 save has seven frames and three
-distinct masks — `0b0000`, `0b0011`, `0b0111` — see section 7. Still nothing has
-set the eighth bit, which is the thing this entry rejects.
+The arguments byte is `0gfedcba` and the eighth bit is undefined, since a
+routine takes at most seven arguments (4.3.4, §5.3). `DecodeStks` clears it.
+
+`Frame.Validate` still rejects it, which is deliberate asymmetry: a bit found in
+a file is something to cope with, while a bit a caller put in a `Frame` is a
+programming error worth reporting. Since reading always clears it, the write
+check can only fire on a hand-built frame.
+
+*Where:* `stack.go`. *Interop risk:* **none**, down from medium.
 
 ### D3 — A file holding both `CMem` and `UMem` is rejected
 
@@ -141,7 +141,9 @@ version — so this bites only when a caller validates. `Frame.IsDummy`
 identifies the frame; nothing removes or reinterprets it, per §10.4.
 
 *Where:* `stack.go`, `ValidateFrames`. *Interop risk:* **low**; it is the
-standard's own rule. Note that the converse is not checked: a V6 save carrying
+standard's own rule, and **both halves are now exercised by real files**: six V3
+saves that carry the frame, and one V6 save from Gargoyle that correctly does
+not (section 7). Note that the converse is still not checked: a V6 save carrying
 a dummy frame anyway is accepted.
 
 ### D32 — `Read` rejects a file whose `IFhd` does not come before `CMem`/`UMem`/`Stks`
@@ -160,13 +162,20 @@ identifier.
 Chunks that are not `IFhd`, `CMem`, `UMem`, or `Stks` may appear anywhere,
 including before the `IFhd`. The standard constrains only those four.
 
-*Where:* `read.go`, `File.checkOrder`. *Interop risk:* **medium**, raised from
-low on evidence. **Frotz 2.55 restores a save whose `IFhd` comes last** (section
-7), so this rejection is stricter than the most widely used interpreter, not
-merely stricter than the average one. Both writers examined emit the required
-order, so nothing has actually broken — but if some writer does not, its files
-will work everywhere except here. This is the first candidate for the lenient
-option D30 anticipates.
+**`IgnoreChunkOrder` relaxes it.** Frotz 2.55 restores a save whose `IFhd`
+comes last (section 7), so this rejection is stricter than the most widely used
+interpreter. Rather than choose between following the format and matching
+Frotz, the check stays on by default and a caller meeting a writer that gets
+the order wrong can opt out. Nothing else is relaxed with it — the identity
+check the ordering rule exists to protect still happens before memory is
+rebuilt, and a save missing its dummy frame is still refused.
+
+Accepting a mis-ordered file does not mean producing one: a save read this way
+is written back in the required order.
+
+*Where:* `read.go`, `File.checkOrder`, `IgnoreChunkOrder`. *Interop risk:*
+**low**, with the option; **medium** without it, which is what a caller that
+never sets it still faces.
 
 ### D33 — `Read` validates the save it reconstructs, and so requires the dummy frame
 
@@ -584,12 +593,23 @@ was needed for — see D34 and D41. That half of this entry is resolved.
 *Interop risk:* **none**. The chunks round-trip whether or not anything
 interprets them.
 
-### D30 — No lenient mode
+### D30 — Lenient mode: one option exists, and most rules need none
 
-§3.5 permits leniency only as an explicit opt-in. Nothing in section 1 above
-can currently be relaxed without a code change. If interoperability testing
-finds a writer that trips D1 or D2, the choice is between relaxing the rule
-outright and introducing the option §3.5 anticipates.
+**Partly resolved.** §3.5 permits leniency only as an explicit opt-in, and there
+is now one such option: `IgnoreChunkOrder` (D32). It is a `ReadOption`, so it
+travels through `Read` and through `Decode` into `File.Save`, and it is off by
+default.
+
+The two entries this was originally written for — D1 and D2, the undefined bits
+in a frame header — needed no option in the end. They were relaxed outright,
+because an undefined bit carries no information worth refusing a file over, so
+there was nothing for a caller to choose between.
+
+What remains without an escape hatch is D33, the dummy-frame requirement, which
+is the other place `Read` refuses a file that decodes cleanly. Frotz refuses the
+same file, so there is no evidence an option is needed. If one turns out to be,
+it should follow `IgnoreChunkOrder`'s shape rather than becoming a general
+"be lenient" switch: a caller should have to name what it is willing to overlook.
 
 *Interop risk:* n/a — this is the escape hatch for everything else.
 
@@ -701,12 +721,14 @@ records what has actually been checked against another implementation so far.
 | A save with no dummy frame | D33 | **built in-test**; Frotz refuses it too |
 | A save carrying an `IntD` chunk | D34, D35, D41 | **have 1** — Bocfel's story-path reference |
 | An `IFhd` longer than 13 bytes | D12, D19 | **built and written**; Frotz restores both |
-| A V6 game | D9 (dummy frame absent) | **story fetchable**, no save — `dfrotz` cannot run V6 |
+| A V6 game | D9 (dummy frame absent) | **fetched, and saved** — Journey via Gargoyle, `testdata/local` |
 | A V1 or V2 game | D27 | **deferred** — no copy exists in any fetchable form |
 
 The last seven rows are additions to §19's list, one per question that only a
-real file can settle. Two remain open, and both are D43: a version 6 *save*
-needs Gargoyle and a person, and no version 1 or 2 story has been found at all.
+real file can settle. **One remains open**: no version 1 or 2 story has been
+found in any form, so D27's trigger is still untested (D43). Everything else on
+this list has a file behind it, though the last two rows live in the gitignored
+`testdata/local` and so reach neither a fresh clone nor CI.
 
 ---
 
@@ -875,6 +897,42 @@ story its name claims, validate, round trip through both encodings, and begin
 with the dummy frame. `TestInteropBocfelSpecifics` pins the four findings above
 to that file, so that a fixture replaced by one lacking them fails loudly rather
 than quietly testing less.
+
+### 2026-07-29 — a version 6 save, and the dummy frame's other half
+
+Journey, saved in Gargoyle by hand, since `dfrotz` cannot run a V6 game. The
+first save this package has seen from a Z-machine version other than 3, and the
+only file that can exercise the branch D9 and D33 turn on.
+
+4840 bytes: `IFhd`(13) `IntD`(40) `CMem`(609) `Stks`(76) `ANNO`(23) `Bfhs`(4008),
+and eight bytes past the FORM, exactly as Bocfel's V3 save had. Five frames, and
+**the first is not a dummy frame** — it is a real call returning to `0x0008cc`:
+
+```
+frame 0: dummy=false pc=0x0008cc discard=true  locals=0
+frame 1: dummy=false pc=0x0069d6 discard=true  locals=5
+frame 2: dummy=false pc=0x00543c discard=false locals=6 args=0b0011
+frame 3: dummy=false pc=0x005e43 discard=false locals=5 args=0b0001
+frame 4: dummy=false pc=0x005d81 discard=true  locals=2
+```
+
+Standard 4.11 asks for the dummy frame "in all versions other than V6", because
+V6 execution begins at a routine rather than an address and there is no
+top-level to hold evaluation stack for. This file is what that looks like, and
+`ValidateFrames` accepts it for version 6 while rejecting the identical stack
+for version 3. **Both halves of D9 are now exercised by real files** — one that
+must have the frame and one that must not.
+
+**D16 gains its strongest evidence.** Three of these five frames discard their
+result, and all three carry `0x00` in the result byte. That is a second
+interpreter, on a different Z-machine version, making the same choice standard
+4.6 asks for. Between this and the Border Zone save, the discard bit has now
+been seen four times and the result byte has been zero every time.
+
+**Where it lives.** `testdata/local/journey-r83-forest.glksave`, not
+`testdata/gargoyle/`, because its story cannot be committed — a save is no use
+in a clone that has no story to read it against, and `interop_test.go` fails on
+a fixture whose story it cannot find. `local_test.go` reads it when present.
 
 ### 2026-07-29 — an over-long `IFhd`, written by us and read by Frotz
 

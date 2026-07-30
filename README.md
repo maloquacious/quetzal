@@ -34,11 +34,14 @@ Interoperability testing is underway. Saves written by Frotz 2.55 and by Bocfel
 2.5 both load here, and both interpreters restore files this package writes. The
 test suite reads the committed fixtures and needs no interpreter installed.
 
-**Version coverage.** The package implements Z-machine versions 1 through 8, but
-is exercised only against version 3 stories, which are the only images whose
-redistribution permits committing them as fixtures. Versions 1, 2, and 6 are
-implemented and untested rather than unsupported — including the computed
-checksum that stories predating the checksum field require. See D43 in
+**Version coverage.** The package implements Z-machine versions 1 through 8. Its
+committed fixtures are all version 3, because those are the only stories whose
+redistribution permits shipping them, but versions 5 and 6 are exercised against
+stories a maintainer can fetch — including a version 6 save, which is the only
+kind that carries no dummy frame. Versions 1 and 2 remain untested by any real
+file: what they need is a story with no checksum in its header, and no copy of
+one could be found. The code computes such a checksum as the format requires;
+nothing has confirmed it against a story that needs it. See D43 and D27 in
 [spec-deltas.md](spec-deltas.md).
 
 ## Install
@@ -180,6 +183,11 @@ full rather than as a difference.
 
 `Save.Validate(story)` runs the same checks without producing a file, for a
 caller assembling a save of its own.
+
+Reading is strict by default. The one exception a caller can ask for is
+`quetzal.IgnoreChunkOrder()`, which accepts a save whose `IFhd` chunk does not
+come first — the format requires that order, but not every interpreter enforces
+it, and a file the rest of the world reads should not be unreadable here.
 
 Errors wrap the sentinels `ErrInvalidFormat`, `ErrStoryMismatch`, `ErrTruncated`,
 and `ErrLimitExceeded`, so test them with `errors.Is`. Container problems are

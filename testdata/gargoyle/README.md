@@ -73,6 +73,11 @@ embedded path becomes uninteresting while the fixture keeps all of its value.
 
 ## Version coverage
 
-Gargoyle changes nothing about D43: it plays version 6 games perfectly well,
-but the constraint is the story files, not the interpreter. See
-`../../spec-deltas.md`.
+Gargoyle plays version 6 games, which `dfrotz` cannot, and that is worth having:
+a V6 save carries no dummy frame, which is the one branch of the stack rules no
+other file exercises.
+
+It does not change D43 though, because the constraint is the story files rather
+than the interpreter. A V6 save made here belongs in `../local/`, since a
+fixture whose story cannot be committed has nothing to be read against in a
+fresh clone. See `../../spec-deltas.md`.

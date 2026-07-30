@@ -188,23 +188,6 @@ func TestDecodeStksMalformed(t *testing.T) {
 			payload: []byte{0, 0, 0, 0x00, 0, 0, 0x10, 0x00},
 			want:    quetzal.ErrTruncated,
 		},
-		{
-			name:    "flags byte sets an undefined bit",
-			payload: frameBytes(0, 0x20, 0, 0, nil, nil),
-			want:    quetzal.ErrInvalidFormat,
-		},
-		{
-			name:    "flags byte sets the top bit",
-			payload: frameBytes(0, 0x80, 0, 0, nil, nil),
-			want:    quetzal.ErrInvalidFormat,
-		},
-		{
-			name: "arguments mask sets an eighth bit",
-			// Only seven arguments are possible, so the eighth bit is not
-			// defined.
-			payload: frameBytes(0, 0, 0, 0x80, nil, nil),
-			want:    quetzal.ErrInvalidFormat,
-		},
 	}
 
 	for _, tt := range tests {
@@ -227,6 +210,92 @@ func TestDecodeStksMalformed(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDecodeStksIgnoresUndefinedBits covers the bits the frame header leaves
+// undefined: the top three of the flags byte and the top bit of the arguments
+// byte. They are masked away rather than rejected.
+//
+// The reasoning is that the standard says nothing about what they mean, so a
+// writer that set one would still be describing a frame this package
+// understands completely. Refusing the file would lose a save over bits with no
+// meaning. Nothing that carries information is discarded: the local count, the
+// discard flag, and the seven defined argument bits all survive intact
+// alongside them.
+func TestDecodeStksIgnoresUndefinedBits(t *testing.T) {
+	tests := []struct {
+		name       string
+		extraFlags byte
+		arguments  byte
+		wantArgs   uint8
+	}{
+		{name: "no undefined bits set", arguments: 0x7f, wantArgs: 0x7f},
+		{name: "one reserved flag bit", extraFlags: 0x20, arguments: 0x03, wantArgs: 0x03},
+		{name: "the top flag bit", extraFlags: 0x80, arguments: 0x03, wantArgs: 0x03},
+		{name: "every reserved flag bit", extraFlags: 0xe0, arguments: 0x03, wantArgs: 0x03},
+		{name: "the eighth argument bit", arguments: 0x80, wantArgs: 0x00},
+		{name: "the eighth bit over a full mask", arguments: 0xff, wantArgs: 0x7f},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A frame with everything else set, so that masking one field
+			// cannot quietly clear another.
+			payload := frameBytes(0x00abcd, tt.extraFlags, 0x05, tt.arguments,
+				[]uint16{0x1111, 0x2222}, []uint16{0x3333})
+			payload = append(payload, dummyFrameBytes(nil)...)
+
+			frames, err := quetzal.DecodeStks(payload, quetzal.Limits{})
+			if err != nil {
+				t.Fatalf("DecodeStks: %v", err)
+			}
+			if len(frames) != 2 {
+				t.Fatalf("got %d frames, want 2; the undefined bits disturbed the frame length",
+					len(frames))
+			}
+
+			got := frames[0]
+			if got.Arguments != tt.wantArgs {
+				t.Errorf("Arguments: got %#02x, want %#02x", got.Arguments, tt.wantArgs)
+			}
+			if got.ReturnPC != 0x00abcd {
+				t.Errorf("ReturnPC: got %#x, want 0xabcd", got.ReturnPC)
+			}
+			if got.ResultVariable != 0x05 {
+				t.Errorf("ResultVariable: got %#02x, want 0x05", got.ResultVariable)
+			}
+			if len(got.Locals) != 2 || got.Locals[0] != 0x1111 || got.Locals[1] != 0x2222 {
+				t.Errorf("Locals: got %v, want [0x1111 0x2222]", got.Locals)
+			}
+			if len(got.Evaluation) != 1 || got.Evaluation[0] != 0x3333 {
+				t.Errorf("Evaluation: got %v, want [0x3333]", got.Evaluation)
+			}
+
+			// The discard flag lives next to the reserved bits, so check
+			// that masking them did not take it along.
+			if got.DiscardResult {
+				t.Error("DiscardResult: got true, want false")
+			}
+
+			// And a masked frame must be writable, since Validate rejects
+			// an arguments mask with the eighth bit set.
+			if err := got.Validate(); err != nil {
+				t.Errorf("Validate: %v; a decoded frame must always be writable", err)
+			}
+		})
+	}
+
+	t.Run("the discard flag still reads through reserved bits", func(t *testing.T) {
+		payload := frameBytes(0, 0xe0|0x10, 0x07, 0, nil, nil)
+
+		frames, err := quetzal.DecodeStks(payload, quetzal.Limits{})
+		if err != nil {
+			t.Fatalf("DecodeStks: %v", err)
+		}
+		if !frames[0].DiscardResult {
+			t.Error("DiscardResult: got false, want true")
+		}
+	})
 }
 
 func TestDecodeStksFrameErrorIndex(t *testing.T) {

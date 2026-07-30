@@ -47,7 +47,7 @@ These come from the spec and shape nearly every file:
 - **Story data is always passed in explicitly.** `CMem` cannot be decoded without the caller's original dynamic memory. `Decode(r) (*File, error)` inspects the container without a story; `Read(r, *Story) (*Save, error)` reconstructs memory and therefore verifies `IFhd` identity first (§7, §8).
 - **Untrusted binary input.** Every length field is attacker-controlled: bounds-check reads, use overflow-safe arithmetic, validate before allocating, honor `Limits`, never panic (§16, §25).
 - **Preserve, don't discard.** Unknown chunks keep their exact ID and payload and their relative order; unknown ≠ error. IFF padding bytes are structural and never appear in `Chunk.Data` (§3.4, §5.4, §7.3).
-- **Strict by default.** Malformed input errors out; any leniency must be an explicit opt-in option (§3.5).
+- **Strict by default.** Malformed input errors out; any leniency must be an explicit opt-in option (§3.5). There is exactly one: `IgnoreChunkOrder()`, because Frotz accepts mis-ordered chunks and we otherwise would not (D30, D32). Follow its shape if another is ever needed — name the rule being overlooked rather than adding a general "be lenient" switch.
 - **No mutation.** Parsing must not touch the caller's story buffer; writing must not mutate `Save` or `Story`. Prefer copying over zero-copy parsing — these files are small (§17).
 
 ## Format details worth memorizing
@@ -55,7 +55,7 @@ These come from the spec and shape nearly every file:
 - All multi-byte integers are big-endian. PCs are 3 bytes on the wire, `uint32` in Go; writers reject `> 0xFFFFFF`.
 - Odd-length chunks get one zero padding byte, excluded from the chunk length and from the FORM length arithmetic.
 - `CMem` is an XOR difference against original dynamic memory with zero-run encoding: a zero byte is followed by a length byte `n` meaning `n+1` zeros. A truncated difference stream means "remaining bytes are zero differences"; overrunning dynamic memory is an error.
-- Frame flags byte: low four bits are the local count (reject `> 15`); the `p` bit means the result is discarded, in which case writers emit a zero result variable.
+- Frame flags byte: low four bits are the local count; the `p` bit means the result is discarded, in which case writers emit a zero result variable. The top three bits and the arguments byte's eighth bit are undefined and are **masked away on read, never rejected** (D1, D2) — so a frame header can no longer be structurally invalid, and a desynced `Stks` stream is caught only by running out of payload.
 - `Evaluation[0]` is the least-recent word, `Evaluation[len-1]` is the top of stack — file order. Document this on every relevant exported type.
 - The V<6 dummy first frame is preserved as-is at this layer, never silently dropped.
 - Duplicate single-instance chunks: first wins, later ones ignored. Multiple `ANNO` chunks are legal. An ignored duplicate never reaches `Save.Chunks`, or the writer would emit two of it.
